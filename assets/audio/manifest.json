@@ -1,0 +1,440 @@
+[
+  {
+    "key": "count",
+    "text": "One, two, three!",
+    "seconds": 2.95,
+    "bytes": 23653
+  },
+  {
+    "key": "disc-bear-behind-rock",
+    "text": "There you are! The bear is behind the rock!",
+    "seconds": 3.6,
+    "bytes": 28837
+  },
+  {
+    "key": "disc-bear-in-basket",
+    "text": "There you are! The bear is in the basket!",
+    "seconds": 3.72,
+    "bytes": 29797
+  },
+  {
+    "key": "disc-bird-front-tree",
+    "text": "There you are! The bird is in front of the tree!",
+    "seconds": 3.55,
+    "bytes": 28453
+  },
+  {
+    "key": "disc-bird-in-box",
+    "text": "There you are! The bird is in the box!",
+    "seconds": 3.6,
+    "bytes": 28837
+  },
+  {
+    "key": "disc-bird-nextto-flower",
+    "text": "There you are! The bird is next to the flower!",
+    "seconds": 4.08,
+    "bytes": 32677
+  },
+  {
+    "key": "disc-bird-on-table",
+    "text": "There you are! The bird is on the table!",
+    "seconds": 3.17,
+    "bytes": 25381
+  },
+  {
+    "key": "disc-bird-under-umbrella",
+    "text": "There you are! The bird is under the umbrella!",
+    "seconds": 3.6,
+    "bytes": 28837
+  },
+  {
+    "key": "disc-cat-behind-tree",
+    "text": "There you are! The cat is behind the tree!",
+    "seconds": 3.29,
+    "bytes": 26341
+  },
+  {
+    "key": "disc-cat-front-tree",
+    "text": "There you are! The cat is in front of the tree!",
+    "seconds": 3.6,
+    "bytes": 28837
+  },
+  {
+    "key": "disc-cat-in-box",
+    "text": "There you are! The cat is in the box!",
+    "seconds": 3.29,
+    "bytes": 26341
+  },
+  {
+    "key": "disc-cat-nextto-house",
+    "text": "There you are! The cat is next to the house!",
+    "seconds": 3.98,
+    "bytes": 31909
+  },
+  {
+    "key": "disc-cat-on-bridge",
+    "text": "There you are! The cat is on the bridge!",
+    "seconds": 3.55,
+    "bytes": 28453
+  },
+  {
+    "key": "disc-cat-under-tree",
+    "text": "There you are! The cat is under the tree!",
+    "seconds": 3.55,
+    "bytes": 28453
+  },
+  {
+    "key": "disc-dog-behind-house",
+    "text": "There you are! The dog is behind the house!",
+    "seconds": 3.17,
+    "bytes": 25381
+  },
+  {
+    "key": "disc-dog-front-house",
+    "text": "There you are! The dog is in front of the house!",
+    "seconds": 3.91,
+    "bytes": 31333
+  },
+  {
+    "key": "disc-dog-in-house",
+    "text": "There you are! The dog is in the house!",
+    "seconds": 3.12,
+    "bytes": 24997
+  },
+  {
+    "key": "disc-dog-nextto-tree",
+    "text": "There you are! The dog is next to the tree!",
+    "seconds": 3.72,
+    "bytes": 29797
+  },
+  {
+    "key": "disc-dog-on-rock",
+    "text": "There you are! The dog is on the rock!",
+    "seconds": 3.29,
+    "bytes": 26341
+  },
+  {
+    "key": "disc-dog-under-bridge",
+    "text": "There you are! The dog is under the bridge!",
+    "seconds": 3.55,
+    "bytes": 28453
+  },
+  {
+    "key": "disc-horse-behind-bush",
+    "text": "There you are! The horse is behind the bush!",
+    "seconds": 3.55,
+    "bytes": 28453
+  },
+  {
+    "key": "disc-horse-front-house",
+    "text": "There you are! The horse is in front of the house!",
+    "seconds": 3.86,
+    "bytes": 30949
+  },
+  {
+    "key": "disc-horse-nextto-flower",
+    "text": "There you are! The horse is next to the flower!",
+    "seconds": 3.91,
+    "bytes": 31333
+  },
+  {
+    "key": "disc-horse-on-box",
+    "text": "There you are! The horse is on the box!",
+    "seconds": 3.65,
+    "bytes": 29221
+  },
+  {
+    "key": "disc-horse-under-umbrella",
+    "text": "There you are! The horse is under the umbrella!",
+    "seconds": 3.86,
+    "bytes": 30949
+  },
+  {
+    "key": "finish",
+    "text": "Great job. You did it!",
+    "seconds": 2.47,
+    "bytes": 19813
+  },
+  {
+    "key": "frontme-bird-tree",
+    "text": "Tweet! It's me! I am in front of the tree!",
+    "seconds": 3.55,
+    "bytes": 28453
+  },
+  {
+    "key": "frontme-cat-tree",
+    "text": "Meow! It's me! I am in front of the tree!",
+    "seconds": 4.51,
+    "bytes": 36133
+  },
+  {
+    "key": "frontme-dog-house",
+    "text": "Woof! It's me! I am in front of the house!",
+    "seconds": 4.08,
+    "bytes": 32677
+  },
+  {
+    "key": "frontme-horse-house",
+    "text": "Neigh! It's me! I am in front of the house!",
+    "seconds": 4.2,
+    "bytes": 33637
+  },
+  {
+    "key": "greet-bear",
+    "text": "Hi, little bear!",
+    "seconds": 1.42,
+    "bytes": 11365
+  },
+  {
+    "key": "greet-bird",
+    "text": "Hi, little bird!",
+    "seconds": 1.58,
+    "bytes": 12709
+  },
+  {
+    "key": "greet-cat",
+    "text": "Hi, little cat!",
+    "seconds": 1.46,
+    "bytes": 11749
+  },
+  {
+    "key": "greet-dog",
+    "text": "Hi, little dog!",
+    "seconds": 1.63,
+    "bytes": 13093
+  },
+  {
+    "key": "greet-horse",
+    "text": "Hi, little horse!",
+    "seconds": 1.73,
+    "bytes": 13861
+  },
+  {
+    "key": "helpme",
+    "text": "Can you help me?",
+    "seconds": 1.37,
+    "bytes": 10981
+  },
+  {
+    "key": "hide-bear",
+    "text": "Hello! I hide, you find me!",
+    "seconds": 3.43,
+    "bytes": 27493
+  },
+  {
+    "key": "hide-bird",
+    "text": "Tweet! I hide, you find me!",
+    "seconds": 3.43,
+    "bytes": 27493
+  },
+  {
+    "key": "hide-cat",
+    "text": "Meow! I hide, you find me!",
+    "seconds": 3.82,
+    "bytes": 30565
+  },
+  {
+    "key": "hide-dog",
+    "text": "Woof! I hide, you find me!",
+    "seconds": 3.38,
+    "bytes": 27109
+  },
+  {
+    "key": "hide-horse",
+    "text": "Neigh! I hide, you find me!",
+    "seconds": 4.03,
+    "bytes": 32293
+  },
+  {
+    "key": "hidein-basket",
+    "text": "I hide in the basket! Find me!",
+    "seconds": 2.9,
+    "bytes": 23269
+  },
+  {
+    "key": "hidein-box",
+    "text": "I hide in the box! Find me!",
+    "seconds": 3.24,
+    "bytes": 25957
+  },
+  {
+    "key": "hidein-house",
+    "text": "I hide in the house! Find me!",
+    "seconds": 2.81,
+    "bytes": 22501
+  },
+  {
+    "key": "intro",
+    "text": "Hi! I'm Rainbow Princess! Let's play!",
+    "seconds": 3.38,
+    "bytes": 27109
+  },
+  {
+    "key": "invite-behind",
+    "text": "Let's play hide-and-seek!",
+    "seconds": 1.85,
+    "bytes": 14821
+  },
+  {
+    "key": "invite-front",
+    "text": "Knock, knock! Who is there?",
+    "seconds": 3.34,
+    "bytes": 26725
+  },
+  {
+    "key": "invite-in",
+    "text": "Let's play peekaboo!",
+    "seconds": 1.94,
+    "bytes": 15589
+  },
+  {
+    "key": "invite-nextto",
+    "text": "Let's see who is taller!",
+    "seconds": 1.94,
+    "bytes": 15589
+  },
+  {
+    "key": "invite-on",
+    "text": "Let's climb up high!",
+    "seconds": 1.9,
+    "bytes": 15205
+  },
+  {
+    "key": "invite-under",
+    "text": "Oh no! It's raining!",
+    "seconds": 2.76,
+    "bytes": 22117
+  },
+  {
+    "key": "onme-box",
+    "text": "Look at me! I am on the box!",
+    "seconds": 3.24,
+    "bytes": 25957
+  },
+  {
+    "key": "onme-bridge",
+    "text": "Look at me! I am on the bridge!",
+    "seconds": 3.12,
+    "bytes": 24997
+  },
+  {
+    "key": "onme-rock",
+    "text": "Look at me! I am on the rock!",
+    "seconds": 3.07,
+    "bytes": 24613
+  },
+  {
+    "key": "onme-table",
+    "text": "Look at me! I am on the table!",
+    "seconds": 3.24,
+    "bytes": 25957
+  },
+  {
+    "key": "peekaboo",
+    "text": "Peekaboo!",
+    "seconds": 1.32,
+    "bytes": 10597
+  },
+  {
+    "key": "praise",
+    "text": "Great job!",
+    "seconds": 1.37,
+    "bytes": 10981
+  },
+  {
+    "key": "quick-cat-tree",
+    "text": "Quick, little cat! Hide under the tree!",
+    "seconds": 2.95,
+    "bytes": 23653
+  },
+  {
+    "key": "quick-horse-umbrella",
+    "text": "Quick, little horse! Hide under the umbrella!",
+    "seconds": 3.07,
+    "bytes": 24613
+  },
+  {
+    "key": "standnext",
+    "text": "Stand next to me!",
+    "seconds": 1.58,
+    "bytes": 12709
+  },
+  {
+    "key": "tryagain",
+    "text": "Try again!",
+    "seconds": 1.15,
+    "bytes": 9253
+  },
+  {
+    "key": "where-bear",
+    "text": "Where is the bear?",
+    "seconds": 1.63,
+    "bytes": 13093
+  },
+  {
+    "key": "where-bird",
+    "text": "Where is the bird?",
+    "seconds": 1.73,
+    "bytes": 13861
+  },
+  {
+    "key": "where-cat",
+    "text": "Where is the cat?",
+    "seconds": 1.63,
+    "bytes": 13093
+  },
+  {
+    "key": "where-dog",
+    "text": "Where is the dog?",
+    "seconds": 1.9,
+    "bytes": 15205
+  },
+  {
+    "key": "where-horse",
+    "text": "Where is the horse?",
+    "seconds": 1.68,
+    "bytes": 13477
+  },
+  {
+    "key": "word-behind",
+    "text": "Behind!",
+    "seconds": 1.03,
+    "bytes": 8293
+  },
+  {
+    "key": "word-front",
+    "text": "In front of!",
+    "seconds": 1.32,
+    "bytes": 10597
+  },
+  {
+    "key": "word-in_",
+    "text": "In!",
+    "seconds": 0.98,
+    "bytes": 7909
+  },
+  {
+    "key": "word-nextto",
+    "text": "Next to!",
+    "seconds": 1.15,
+    "bytes": 9253
+  },
+  {
+    "key": "word-on",
+    "text": "On!",
+    "seconds": 0.89,
+    "bytes": 7141
+  },
+  {
+    "key": "word-under",
+    "text": "Under!",
+    "seconds": 0.94,
+    "bytes": 7525
+  },
+  {
+    "key": "yay",
+    "text": "Yay!",
+    "seconds": 0.89,
+    "bytes": 7141
+  }
+]
