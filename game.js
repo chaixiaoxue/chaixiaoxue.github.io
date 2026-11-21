@@ -1,6 +1,7 @@
 /* ============================================================================
- * 彩虹小岛 · Rainbow Island — v18-threejs
- * Three.js 3D 重建版（基于 v17 的内容与流程，真实 3D 岛屿 + 真走路动画）。
+ * 彩虹小岛 · Rainbow Island — v19
+ * Three.js 3D 版（v18 修复版：放一放卡死修好、开声音有反馈、人物放大 2 倍、
+ *   流程简化直接进第一题、"?" 真提示、选择卡放大、小地图去掉）。
  * - 纯静态：index.html + game.js + three.module.js + assets/audio/，无构建步骤。
  * - 3D 角色全部由 Three.js 几何体拼成（低多边形，v17 配色），腿会真的迈步、
  *   身体会起伏、会转向；公主/动物在岛上走，镜头第三人称跟随。
@@ -92,11 +93,11 @@ function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
 /* 3D 位置偏移：相对镜头（镜头在南边 +z 往北看），behind = 更北（-z），front = 更南（+z） */
 function wordOffset3D(wordId) {
   switch (wordId) {
-    case 'in':     return { dx: 0,    dz: 0,    dy: -0.55, cls: 'inbox' };
+    case 'in':     return { dx: 0,    dz: 0,    dy: -0.3,  cls: 'inbox' };
     case 'on':     return { dx: 0,    dz: 0,    dy: 0,     cls: 'on' };
     case 'under':  return { dx: 0,    dz: 1.4,  dy: 0,     cls: '' };
     case 'nextto': return { dx: 2.8,  dz: 0.4,  dy: 0,     cls: '' };
-    case 'behind': return { dx: 2.5,  dz: -1.3, dy: 0,     cls: 'behind' };
+    case 'behind': return { dx: 1.2,  dz: -1.6, dy: 0,     cls: 'behind' };
     case 'front':  return { dx: 0,    dz: 2.4,  dy: 0,     cls: '' };
     default:       return { dx: 0,    dz: 0,    dy: 0,     cls: '' };
   }
@@ -107,7 +108,7 @@ function circleOffset3D(wordId) {
     case 'on':     return { dx: 0,    dz: -0.5 };
     case 'under':  return { dx: -2.6, dz: 1.8 };
     case 'nextto': return { dx: 2.9,  dz: 0 };
-    case 'behind': return { dx: 3.2,  dz: -2.2 };
+    case 'behind': return { dx: 2.0,  dz: -2.6 };
     case 'front':  return { dx: 0,    dz: 2.7 };
     default:       return { dx: 0,    dz: 0 };
   }
@@ -173,12 +174,13 @@ var G = {
   modeIdx: 0, MODES: ['day', 'sunset', 'night'],
   camFocus: null, camOffset: null, camTarget: null,
   circles: [], hintRing: null, confettiBits: [], clouds: [], stars3d: [],
-  thumbRenderer: null, raycaster: null, pointer: null,
+  thumbRenderer: null, thumbCache: {}, raycaster: null, pointer: null,
   dragState: null, nightTint: null, sea: null, seaRings: [],
   miniTimer: null
 };
 G.camFocus = { x: 0, y: 1, z: 8 };
-G.camOffset = { x: 0, y: 11, z: 16 };
+/* v19：镜头拉近，人物在屏幕上大约大一倍 */
+G.camOffset = { x: 0, y: 8, z: 12.5 };
 G.camTarget = { x: 0, y: 1, z: 8 };
 G.camMode = 'follow'; G.followId = 'princess';
 
@@ -238,9 +240,9 @@ function buildRenderer() {
   G.renderer.outputColorSpace = THREE.SRGBColorSpace;
   G.scene = new THREE.Scene();
   G.scene.background = new THREE.Color(0x9fd8ff);
-  G.scene.fog = new THREE.Fog(0x9fd8ff, 95, 230);
+  G.scene.fog = new THREE.Fog(0x9fd8ff, 120, 280);
   G.camera = new THREE.PerspectiveCamera(55, 1, 0.1, 500);
-  G.camera.position.set(0, 14, 27);
+  G.camera.position.set(0, 10, 21);
   G.camera.lookAt(0, 1, 8);
   var hemi = new THREE.HemisphereLight(0xcfe8ff, 0x8a7a5a, 1.0);
   G.scene.add(hemi);
@@ -630,7 +632,7 @@ function makeQuadruped(cfg) {
   return root;
 }
 function makeBird() {
-  var s = 0.8;
+  var s = 1.1;
   var root = new THREE.Group();
   var bodyG = new THREE.Group();
   root.add(bodyG);
@@ -746,19 +748,27 @@ function makePrincess() {
   return root;
 }
 var CHAR_BUILDERS = {
-  horse: function () { return makeQuadruped({ scale: 1.15, body: 0x8b5e34, belly: 0xe8c39e, snout: 0xe8c39e, legs: 0x6b4423, ears: 'long', neckLen: 0.55, headY: 0.62, mane: true, tailColor: 0x5c3a21 }); },
-  dog: function () { return makeQuadruped({ scale: 0.85, body: 0xd9a066, belly: 0xf3e0c8, snout: 0xf3e0c8, legs: 0xb07a3e, ears: 'point', neckLen: 0.3, headY: 0.42, mane: false, tailColor: 0xd9a066 }); },
-  cat: function () { return makeQuadruped({ scale: 0.75, body: 0xf59e0b, belly: 0xfde68a, snout: 0xfde68a, legs: 0xd97706, ears: 'point', neckLen: 0.3, headY: 0.4, mane: false, tailColor: 0xf59e0b }); },
-  bear: function () { return makeQuadruped({ scale: 1.0, body: 0x8b5a2b, belly: 0xd9b48a, snout: 0xd9b48a, legs: 0x6b4423, ears: 'round', neckLen: 0.25, headY: 0.38, mane: false, tailColor: 0x8b5a2b }); },
+  horse: function () { return makeQuadruped({ scale: 1.6, body: 0x8b5e34, belly: 0xe8c39e, snout: 0xe8c39e, legs: 0x6b4423, ears: 'long', neckLen: 0.55, headY: 0.62, mane: true, tailColor: 0x5c3a21 }); },
+  dog: function () { return makeQuadruped({ scale: 1.2, body: 0xd9a066, belly: 0xf3e0c8, snout: 0xf3e0c8, legs: 0xb07a3e, ears: 'point', neckLen: 0.3, headY: 0.42, mane: false, tailColor: 0xd9a066 }); },
+  cat: function () { return makeQuadruped({ scale: 1.05, body: 0xf59e0b, belly: 0xfde68a, snout: 0xfde68a, legs: 0xd97706, ears: 'point', neckLen: 0.3, headY: 0.4, mane: false, tailColor: 0xf59e0b }); },
+  bear: function () { return makeQuadruped({ scale: 1.4, body: 0x8b5a2b, belly: 0xd9b48a, snout: 0xd9b48a, legs: 0x6b4423, ears: 'round', neckLen: 0.25, headY: 0.38, mane: false, tailColor: 0x8b5a2b }); },
   bird: makeBird,
   princess: makePrincess
 };
 function buildCharacters() {
   Object.keys(CHAR_BUILDERS).forEach(function (id) {
     var g = CHAR_BUILDERS[id]();
+    /* v19：人物放大。公主整体再放大 1.5 倍；四足动物的脚天生比根节点高
+       0.25*scale（腿轴在身体里），记下 groundOff，setCharPos 会把它扣掉，
+       这样脚正好踩在地面上，不会飘在空中。 */
+    if (id === 'princess') g.scale.setScalar(1.5);
+    var u = g.userData;
+    if (u.kind === 'quad') u.groundOff = 0.25 * u.scale;
+    else if (u.kind === 'bird') u.groundOff = 0;
+    else u.groundOff = 0.05;
     var p = POS[id];
     var x = px(p.x), z = pz(p.y);
-    g.position.set(x, terrainH(x, z), z);
+    g.position.set(x, terrainH(x, z) - u.groundOff, z);
     g.rotation.y = Math.random() * Math.PI * 2;
     g.traverse(function (o) { o.userData.charId = id; });
     G.scene.add(g);
@@ -819,7 +829,8 @@ function charPos(id) {
 }
 function setCharPos(id, x, z, yOff) {
   var g = G.chars[id];
-  g.position.set(x, terrainH(x, z) + (yOff || 0), z);
+  /* yOff 是“脚”的高度偏移（0 = 脚踩地面；on 时 = 物件顶面） */
+  g.position.set(x, terrainH(x, z) + (yOff || 0) - (g.userData.groundOff || 0), z);
 }
 function faceToward(g, tx, tz) {
   var dx = tx - g.position.x, dz = tz - g.position.z;
@@ -954,6 +965,16 @@ function setDialogue(speakerId, name, segments) {
 }
 function esc(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 function setStatus(t) { $('status').textContent = t; }
+/* 屏幕中央大提示条（“下一题 ▶”“声音开啦 🔊”），几秒后自动消失 */
+var toastTimer = null;
+function showToast(text, ms) {
+  var el = $('toast');
+  if (!el) return;
+  el.textContent = text;
+  el.classList.add('show');
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(function () { el.classList.remove('show'); }, ms || 1500);
+}
 function parseSegments(textHtml) {
   var segments = [];
   var re = /<span class='key'>(.*?)<\/span>/g, last = 0, m;
@@ -1078,6 +1099,21 @@ function setCamFocus(x, y, z) {
   G.camMode = 'fixed';
   G.camTarget.x = x; G.camTarget.y = y; G.camTarget.z = z;
 }
+/* v19：镜头立刻切过去（不慢慢平移），回合一开始画面里就有人有动物 */
+function snapCameraTo(x, y, z) {
+  G.camMode = 'fixed';
+  G.camTarget.x = x; G.camTarget.y = y; G.camTarget.z = z;
+  G.camFocus.x = x; G.camFocus.y = y; G.camFocus.z = z;
+  G.camera.position.set(x + G.camOffset.x, y + G.camOffset.y, z + G.camOffset.z);
+  G.camera.lookAt(x, y, z);
+}
+/* 3D 点 → 屏幕像素坐标（供点圈圈、测试用） */
+function projectToClient(x, y, z) {
+  G.camera.updateMatrixWorld();
+  var v = new THREE.Vector3(x, y, z).project(G.camera);
+  var rect = G.renderer.domElement.getBoundingClientRect();
+  return { x: rect.left + (v.x + 1) / 2 * rect.width, y: rect.top + (1 - v.y) / 2 * rect.height, behind: v.z > 1 };
+}
 function followPrincess() {
   G.camMode = 'follow';
   G.followId = 'princess';
@@ -1128,8 +1164,7 @@ async function startGame() {
   G.wanderOn = true;
   startAllWander();
   renderStars(); renderWordChip();
-  setDialogue('princess', '彩虹公主', [{ t: '小岛上有好多小动物，点一点小岛，咱们去找它们玩吧！', key: false }]);
-  setStatus('先逛逛小岛吧');
+  /* v19：不经过介绍卡，直接进第一题 */
   await startRound();
 }
 async function startRound() {
@@ -1138,22 +1173,28 @@ async function startRound() {
   G.curRound = r;
   G.wrongCount = 0;
   var myToken = ++G.seqToken;
+  /* v19：记下每题开始时间，供测试核对“出题有多快”（游戏内计时，不受测试工具轮询影响） */
+  G.tRoundStartMs = performance.now();
+  G.tAnswerMs = null;
   G.phase = 'dialogue';
-  followPrincess();
   renderWordChip();
   var ch = CHARS[r.animal];
   var spot = SPOTS[r.spot];
+  var sp = G.spots[r.spot];
   stopWander(r.animal);
   spreadAnimalsAwayFrom(spot);
-  var ap = charPos(r.animal);
-  setStatus('彩虹公主去找' + ch.zh + '啦 · ' + ch.zh + '在' + (ch.zone || '岛上') + '里');
-  await walkPrincessTo(ap.x + 1.2, ap.z + 0.4, 8);
-  if (myToken !== G.seqToken) return;
-  await sayLine(r.animal, 'Hello!', { tts: CHAR_GREETING[r.animal] });
-  if (myToken !== G.seqToken) return;
-  princessWave();
-  await sayLine('princess', 'Hello, little ' + ch.en + '!', { tts: 'Hello, little ' + ch.en + '!' });
-  if (myToken !== G.seqToken) return;
+  /* v19：不慢慢走过去、不寒暄——公主直接出现在题目旁边，镜头立刻切过去，
+     画面一开始就有人有动物，中文提示和英文任务说的是同一件事。 */
+  stopMoving('princess');
+  clearPlacement('princess');
+  setCharPos('princess', sp.x + 1.6, sp.z + 2.2, 0);
+  /* v19：公主面向镜头（南边，rotation.y = 0 时脸朝 +Z）——之前是 Math.PI，
+     孩子只能看到后脑勺和辫子，脸（眼睛/笑容都在 +Z 面）完全看不见。 */
+  G.chars.princess.rotation.y = 0;
+  jumpChar('princess', 0.3);
+  snapCameraTo(sp.x, 1.5, sp.z);
+  if (r.type === 'find') setStatus('彩虹公主去找' + ch.zh + '啦 · ' + ch.zh + '要去' + spot.zh + '那里');
+  else setStatus('把' + ch.zh + '放到' + spot.zh + WORDS[r.word].zh);
   if (r.type === 'find') await runFindRound(r, myToken);
   else await runPlaceRound(r, myToken);
 }
@@ -1162,19 +1203,20 @@ async function runFindRound(r, myToken) {
   var spot = SPOTS[r.spot];
   var sp = G.spots[r.spot];
   setStatus(ch.zh + '要去' + spot.zh + '那里');
-  await sayLine('princess', 'Watch! Look at the ' + ch.en + '!', { tts: 'Watch! Look at the ' + ch.en + '!' });
-  if (myToken !== G.seqToken) return;
-  await moveTo(r.animal, sp.x, sp.z, 6);
+  /* v19：小动物直接出现在题目位置（不慢慢走过去），镜头已经切好了 */
+  stopMoving(r.animal);
   placeAnimalAtSpot(r.animal, spot, r.word);
-  setCamFocus(sp.x, 1.5, sp.z);
-  await sleep(350);
-  await walkPrincessTo(sp.x + 1.6, sp.z + 2.2, 8);
+  jumpChar(r.animal, 0.4);
+  /* v19：缩略图不在读题时生成——生成 3D 缩略图会堵主线程，会把语音计时也拖慢。
+     卡片先出文字就能点，图在 askFindChoice 里出题后再慢慢补（见下）。 */
+  await sayLine('princess', 'Watch! Look at the ' + ch.en + '!', { tts: 'Watch! Look at the ' + ch.en + '!' });
   if (myToken !== G.seqToken) return;
   await sayLine('princess', 'Where is the ' + ch.en + '?', { tts: 'Where is the ' + ch.en + '?' });
   if (myToken !== G.seqToken) return;
   await playQuestionAudio(r);
   if (myToken !== G.seqToken) return;
   G.phase = 'answering';
+  G.tAnswerMs = Math.round(performance.now() - G.tRoundStartMs);
   setStatus('点一点：小动物在哪里？');
   var picked = await askFindChoice(r);
   if (myToken !== G.seqToken) return;
@@ -1185,18 +1227,24 @@ async function runPlaceRound(r, myToken) {
   var spot = SPOTS[r.spot];
   var sp = G.spots[r.spot];
   var w = WORDS[r.word];
+  /* v19：小动物直接出现在题目旁边（东南侧，离三个圈都够远，不会挡住圈），
+     中文和英文说的是同一件事：把小动物放到那个地方。 */
+  stopMoving(r.animal);
+  clearPlacement(r.animal);
+  var sx = clamp(sp.x + 3.0, -56, 56), sz = clamp(sp.z + 2.5, -56, 56);
+  setCharPos(r.animal, sx, sz, 0);
+  /* v19：小动物也面向镜头，孩子一开题就看到脸（之前沿用散步时的朝向，经常是背影） */
+  G.chars[r.animal].rotation.y = 0;
+  G.placeStart = { x: sx, z: sz };
+  jumpChar(r.animal, 0.4);
   await sayLine('princess', 'Put the ' + ch.en + ' <span class=\'key\'>' + w.en + '</span> the ' + spot.en + '!',
     { tts: 'Put the ' + ch.en + ' ' + w.en + ' the ' + spot.en + '!' });
-  if (myToken !== G.seqToken) return;
-  await Promise.all([
-    moveTo(r.animal, clamp(sp.x + 2.2, -56, 56), clamp(sp.z + 0.8, -56, 56), 7),
-    walkPrincessTo(sp.x, sp.z + 2.6, 8)
-  ]);
   if (myToken !== G.seqToken) return;
   await playQuestionAudio(r);
   if (myToken !== G.seqToken) return;
   G.phase = 'answering';
-  setStatus('把' + ch.zh + '拖到对的地方，或点一下圈圈');
+  G.tAnswerMs = Math.round(performance.now() - G.tRoundStartMs);
+  setStatus('把' + ch.zh + '放到' + spot.zh + w.zh + ' · 拖过去或点圈圈');
   var ok = await askPlace(r);
   if (myToken !== G.seqToken) return;
   if (ok) await celebrateAndSay(r, myToken);
@@ -1212,13 +1260,14 @@ function askFindChoice(r) {
     G.choiceResolve = resolve;
     var others = WORD_ORDER.filter(function (id) { return id !== r.word; });
     var opts = shuffle([r.word].concat(shuffle(others).slice(0, 2)));
-    opts.forEach(function (wid) {
+    opts.forEach(function (wid, i) {
       var card = document.createElement('div');
       card.className = 'choice';
       card.dataset.wid = wid;
       var img = document.createElement('img');
       img.alt = '';
-      img.src = makeChoiceThumb(r.animal, r.spot, wid);
+      var key = r.animal + '|' + r.spot + '|' + wid;
+      if (G.thumbCache[key]) img.src = G.thumbCache[key];
       var lab = document.createElement('div');
       lab.className = 'clabel';
       lab.textContent = CHARS[r.animal].zh + WORDS[wid].zh + SPOTS[r.spot].zh;
@@ -1227,6 +1276,17 @@ function askFindChoice(r) {
       card.addEventListener('click', function () { onChoiceTap(r, card); });
       layer.appendChild(card);
       G.choiceCards.push(card);
+      /* v19：缩略图在出题后才生成——卡片已经出来能点了，图随后一张张补上。
+         这样读题语音和出题都不被堵；真机上每张图只要几十毫秒。 */
+      if (!G.thumbCache[key]) {
+        (function (wid2, key2, img2, card2, i2) {
+          setTimeout(function () {
+            if (G.choiceCards.indexOf(card2) === -1) return; /* 已换题，不补旧图 */
+            try { G.thumbCache[key2] = makeChoiceThumb(r.animal, r.spot, wid2); } catch (e) { console.warn('[thumb] failed', e); return; }
+            if (G.choiceCards.indexOf(card2) !== -1 && !img2.getAttribute('src')) img2.src = G.thumbCache[key2];
+          }, i2 * 80);
+        })(wid, key, img, card, i);
+      }
     });
     hideMinimap(true);
   });
@@ -1268,31 +1328,38 @@ function askPlace(r) {
       var off = circleOffset3D(wid);
       var cx = clamp(sp.x + off.dx, -54, 54), cz = clamp(sp.z + off.dz, -54, 54);
       var cy = terrainH(cx, cz) + 0.06;
-      var ring = new THREE.Mesh(new THREE.RingGeometry(0.75, 1.0, 32),
-        new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9, side: THREE.DoubleSide, depthWrite: false }));
+      /* v19：圈放大，好点中；圈上加一个飘着的金色小球当靶心，远处也看得见 */
+      var ring = new THREE.Mesh(new THREE.RingGeometry(1.0, 1.35, 32),
+        new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.95, side: THREE.DoubleSide, depthWrite: false }));
       ring.rotation.x = -Math.PI / 2;
       ring.position.set(cx, cy, cz);
-      var hit = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 1.1, 1.2, 12),
+      ring.userData.ringId = wid;
+      var hit = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.4, 1.6, 12),
         new THREE.MeshBasicMaterial({ visible: false }));
-      hit.position.set(cx, cy + 0.5, cz);
+      hit.position.set(cx, cy + 0.6, cz);
       hit.userData.ringId = wid;
-      G.scene.add(ring); G.scene.add(hit);
-      G.circles.push({ wid: wid, x: cx, y: cy, z: cz, ring: ring, hit: hit, spotX: sp.x, spotZ: sp.z, phase: Math.random() * 6 });
+      var dot = sph(0.32, 0xffb703, cx, cy + 1.5, cz);
+      dot.userData.ringId = wid;
+      G.scene.add(ring); G.scene.add(hit); G.scene.add(dot);
+      G.circles.push({ wid: wid, x: cx, y: cy, z: cz, ring: ring, hit: hit, dot: dot, spotX: sp.x, spotZ: sp.z, phase: Math.random() * 6, hintPulse: false });
     });
     G.placeResolve = resolve;
     G.placeRound = r;
   });
 }
 function clearCircles() {
-  G.circles.forEach(function (c) { G.scene.remove(c.ring); G.scene.remove(c.hit); });
+  G.circles.forEach(function (c) { G.scene.remove(c.ring); G.scene.remove(c.hit); if (c.dot) G.scene.remove(c.dot); });
   G.circles = [];
   G.placeResolve = null; G.placeRound = null;
   G.dragState = null;
 }
+/* v19：先判对错，再动动物。点错了动物原地不动、永远不会消失；
+   点对了才把动物走过去放到正确位置。 */
 async function onCircleTap(r, circle) {
-  if (G.phase !== 'answering') return;
-  await moveTo(r.animal, circle.spotX, circle.spotZ, 7);
+  if (G.phase !== 'answering' || !circle) return;
   if (circle.wid === r.word) {
+    stopMoving(r.animal);
+    await moveTo(r.animal, circle.spotX, circle.spotZ, 9);
     placeAnimalAtSpot(r.animal, SPOTS[r.spot], r.word);
     var res = G.placeResolve;
     clearCircles();
@@ -1301,9 +1368,18 @@ async function onCircleTap(r, circle) {
     wrongPick(r);
   }
 }
+/* 答错后把动物送回本回合的出发点（看得见的地方），回合永远不会卡死 */
+function returnAnimalToStart(r) {
+  if (!G.placeStart || r.type !== 'place') return;
+  var g = G.chars[r.animal];
+  stopMoving(r.animal);
+  clearPlacement(r.animal);
+  setCharPos(r.animal, G.placeStart.x, G.placeStart.z, 0);
+}
 async function wrongPick(r) {
   G.wrongCount++;
   var g = G.chars[r.animal];
+  returnAnimalToStart(r);
   var baseX = g.position.x;
   G.tweens.push({ t: 0, dur: 0.5, fn: function (k) {
     g.position.x = baseX + Math.sin(k * Math.PI * 4) * 0.15 * (1 - k);
@@ -1312,6 +1388,9 @@ async function wrongPick(r) {
   setStatus('不是这里哦，再试一次');
   await speakTTS('Try again! Where is the ' + CHARS[r.animal].en + '?', 0.7);
 }
+/* v19：”?” 给真提示——金色光圈圈住正确答案 + 正确卡片闪烁 +
+   公主用中文说出答案 + 重新慢读单词和整句。光圈围着动物本身（找一找）
+   或正确的圈（放一放），镜头立刻切过去。 */
 async function doHint() {
   if (!G.curRound || G.phase !== 'answering') return;
   var r = G.curRound;
@@ -1321,26 +1400,30 @@ async function doHint() {
   if (r.type === 'place') {
     var right = null;
     G.circles.forEach(function (c) { if (c.wid === r.word) right = c; });
-    if (right) { cx = right.x; cz = right.z; } else { cx = sp.x; cz = sp.z; }
+    if (right) { cx = right.x; cz = right.z; right.hintPulse = true; }
+    else { cx = sp.x; cz = sp.z; }
   } else {
-    cx = sp.x; cz = sp.z;
+    var ap = charPos(r.animal);
+    cx = ap.x; cz = ap.z;
     pulseCorrectChoice(r.word);
   }
   if (G.hintRing) { G.scene.remove(G.hintRing); G.hintRing = null; }
-  var ring = new THREE.Mesh(new THREE.TorusGeometry(1.4, 0.14, 10, 32), mat(0xffb703));
+  var ring = new THREE.Mesh(new THREE.TorusGeometry(1.8, 0.18, 10, 32), mat(0xffb703));
   ring.rotation.x = Math.PI / 2;
-  ring.position.set(cx, terrainH(cx, cz) + 0.4, cz);
+  ring.position.set(cx, terrainH(cx, cz) + 0.5, cz);
   G.scene.add(ring);
   G.hintRing = ring;
-  G.tweens.push({ t: 0, dur: 1.6, fn: function (k) {
-    var s = 1 + k * 0.6;
+  G.tweens.push({ t: 0, dur: 2.2, fn: function (k) {
+    var s = 1 + Math.sin(k * Math.PI * 3) * 0.18;
     ring.scale.set(s, s, s);
-    ring.material.opacity = 1 - k * 0.7;
+    ring.material.opacity = 1 - k * 0.5;
   }, done: function () { G.scene.remove(ring); if (G.hintRing === ring) G.hintRing = null; } });
-  setCamFocus(cx, 1.5, cz);
+  snapCameraTo(cx, 1.5, cz);
   princessWave();
+  var segs = sentenceSegments(r.word, r.animal, r.spot);
+  setDialogue('princess', '彩虹公主', [{ t: '看这里！', key: false }].concat(segs));
+  setStatus('提示：' + CHARS[r.animal].zh + '在' + spot.zh + WORDS[r.word].zh);
   await playQuestionAudio(r);
-  if (G.phase === 'answering' && G.curRound && G.curRound.type === 'place') followPrincess();
 }
 async function celebrateAndSay(r, myToken) {
   G.phase = 'celebrating';
@@ -1363,15 +1446,20 @@ async function celebrateAndSay(r, myToken) {
   G.stars++;
   renderStars();
   setStatus('说得真棒！★');
-  await sleep(600);
+  /* v19：明确告诉孩子下一题要来了，再进下一题；动物直接回家，不慢慢走回去 */
+  G.phase = 'transition';
+  showToast('下一题 ▶', 1200);
+  await sleep(1100);
   G.phase = 'idle';
   G.roundIdx++;
   if (myToken !== G.seqToken) return;
   if (G.roundIdx < G.rounds.length) {
     renderWordChip();
-    await homeAnimal(r.animal);
+    stopMoving(r.animal);
+    clearPlacement(r.animal);
+    var h = HOME_POS[r.animal];
+    setCharPos(r.animal, px(h.x), pz(h.y), 0);
     startWander(r.animal);
-    await sleep(400);
     startRound();
   } else {
     showFinish();
@@ -1407,6 +1495,7 @@ function getState() {
     curRound: G.curRound ? { word: G.curRound.word, animal: G.curRound.animal,
       spot: G.curRound.spot, type: G.curRound.type } : null,
     lastSpoken: G.lastSpoken.slice(-6),
+    tAnswerMs: G.tAnswerMs,
     chars: Object.keys(G.chars).map(function (id) {
       var g = G.chars[id];
       return { id: id, x: +g.position.x.toFixed(2), z: +g.position.z.toFixed(2),
@@ -1416,11 +1505,12 @@ function getState() {
 }
 
 /* ---------------- 找一找缩略图：独立小场景渲染 ---------------- */
+/* v19：选择卡缩略图放大——动物占画面主体，镜头拉近，三张卡一眼能分清 */
 function makeChoiceThumb(animalId, spotId, wordId) {
   try {
     if (!G.thumbRenderer) {
       G.thumbRenderer = new THREE.WebGLRenderer({ preserveDrawingBuffer: true, antialias: true });
-      G.thumbRenderer.setSize(160, 110);
+      G.thumbRenderer.setSize(260, 180);
       G.thumbRenderer.outputColorSpace = THREE.SRGBColorSpace;
     }
     var scene = new THREE.Scene();
@@ -1433,17 +1523,17 @@ function makeChoiceThumb(animalId, spotId, wordId) {
     ground.rotation.x = -Math.PI / 2;
     scene.add(ground);
     var spot = SPOT_BUILDERS[spotId]();
-    spot.scale.setScalar(0.62);
+    spot.scale.setScalar(0.5);
     scene.add(spot);
     var off = miniOffset3D(wordId);
     var an = CHAR_BUILDERS[animalId]();
-    an.scale.setScalar(0.62);
-    an.position.set(off.dx * 0.62, 0, off.dz * 0.62);
-    if (off.cls === 'inbox') an.position.y = -0.3;
-    if (off.cls === 'on') an.position.y = (G.spots[spotId] ? G.spots[spotId].topY - terrainH(G.spots[spotId].x, G.spots[spotId].z) : 1) * 0.62;
+    an.scale.setScalar(1.05);
+    an.position.set(off.dx * 0.5, 0, off.dz * 0.5);
+    if (off.cls === 'inbox') an.position.y = -0.2;
+    if (off.cls === 'on') an.position.y = (G.spots[spotId] ? G.spots[spotId].topY - terrainH(G.spots[spotId].x, G.spots[spotId].z) : 1) * 0.5;
     scene.add(an);
-    var cam = new THREE.PerspectiveCamera(45, 160 / 110, 0.1, 50);
-    cam.position.set(0, 6.5, 6.8);
+    var cam = new THREE.PerspectiveCamera(45, 260 / 180, 0.1, 50);
+    cam.position.set(0, 4.2, 5.4);
     cam.lookAt(0, 0.5, 0);
     G.thumbRenderer.render(scene, cam);
     return G.thumbRenderer.domElement.toDataURL('image/png');
@@ -1454,7 +1544,8 @@ function makeChoiceThumb(animalId, spotId, wordId) {
 }
 
 /* ---------------- 小地图 ---------------- */
-function hideMinimap(hide) { $('minimap').style.display = hide ? 'none' : 'block'; }
+/* v19：小地图看不懂，已从界面去掉；这两个函数留着当空操作，免得别处调用报错 */
+function hideMinimap(hide) { var el = $('minimap'); if (el) el.style.display = hide ? 'none' : 'block'; }
 function drawMinimap() {
   var cv = $('minimap');
   if (!cv || cv.style.display === 'none') return;
@@ -1510,8 +1601,10 @@ function renderWordChip() {
   }
 }
 function showOverlay(name) {
-  ['ov-unlock', 'ov-setup', 'ov-intro', 'ov-finish'].forEach(function (id) {
-    $(id).classList.toggle('show', id === 'ov-' + name);
+  /* v19：介绍卡已去掉，只剩开声音 / 家长设置 / 完成页三个遮罩 */
+  ['ov-unlock', 'ov-setup', 'ov-finish'].forEach(function (id) {
+    var el = $(id);
+    if (el) el.classList.toggle('show', id === 'ov-' + name);
   });
 }
 function buildSetupGrid() {
@@ -1572,16 +1665,21 @@ function buildUI() {
   renderStars(); renderWordChip();
   $('unlock-btn').addEventListener('click', function () {
     G.audioUnlocked = true;
-    playClip('silence');
+    /* v19：点一下立刻听得见、看得见——马上播一声表扬音效，按钮变成“声音开啦”，
+       家长设置页里也出现绿色提示。以前只播 0.15 秒静音，看着就像没打开。 */
+    var btn = $('unlock-btn');
+    btn.textContent = '声音开啦 🔊';
+    btn.disabled = true;
+    playClip('praise');
+    showToast('声音开啦 🔊', 1800);
+    var note = $('sound-note');
+    if (note) note.style.display = 'block';
     setDialogue('princess', '彩虹公主', [{ t: '你好呀！我是彩虹公主，欢迎来到彩虹小岛！', key: false }]);
     buildSetupGrid();
     showOverlay('setup');
   });
+  /* v19：点“开始玩”直接进第一题，不经过介绍卡 */
   $('start-btn').addEventListener('click', function () {
-    showOverlay('intro');
-    renderWordChip();
-  });
-  $('go-btn').addEventListener('click', function () {
     showOverlay(null);
     startGame();
   });
@@ -1681,10 +1779,42 @@ function onSpotTap(spotId) {
     setStatus('这是' + sp.zh);
   }
 }
+/* v19：放一放回合的点选改用屏幕坐标——算每个圈和动物在屏幕上的位置，
+   点到谁最近就选谁。3D 射线会被房子/大树挡住（v18 点圈圈失灵的根因），
+   屏幕坐标不会：圈在画面上看得见，就一定点得到。 */
+function pickPlaceTarget(ev) {
+  var best = null, bestD = 1e9;
+  G.circles.forEach(function (c) {
+    var p = projectToClient(c.x, c.y + 0.4, c.z);
+    if (p.behind) return;
+    var d = Math.hypot(ev.clientX - p.x, ev.clientY - p.y);
+    if (d < bestD) { bestD = d; best = { kind: 'ring', circle: c, d: d }; }
+  });
+  var ap = charPos(G.curRound.animal);
+  var ag = G.chars[G.curRound.animal];
+  var pa = projectToClient(ap.x, ag.position.y + 1.4, ap.z);
+  if (!pa.behind) {
+    var da = Math.hypot(ev.clientX - pa.x, ev.clientY - pa.y);
+    if (da < bestD) { bestD = da; best = { kind: 'animal', d: da }; }
+  }
+  if (!best) return null;
+  if (best.kind === 'ring' && best.d <= 75) return best;
+  if (best.kind === 'animal' && best.d <= 85) return best;
+  return null;
+}
 function bindWorldInput() {
   var cv = G.renderer.domElement;
   cv.addEventListener('pointerdown', function (ev) {
     if (document.querySelector('.overlay.show')) return;
+    /* 放一放答题中：先用屏幕坐标点选（圈 > 动物，离点按处最近的赢） */
+    if (G.phase === 'answering' && G.curRound && G.curRound.type === 'place') {
+      var pick = pickPlaceTarget(ev);
+      if (!pick) return;
+      if (pick.kind === 'ring') { onCircleTap(G.curRound, pick.circle); return; }
+      G.dragState = { animal: G.curRound.animal, moved: false };
+      stopMoving(G.curRound.animal);
+      return;
+    }
     var hit = pickAt(ev);
     if (!hit) return;
     if (hit.kind === 'ring') {
@@ -1720,18 +1850,23 @@ function bindWorldInput() {
     setCharPos(id, clamp(pt.x, -56, 56), clamp(pt.z, -56, 56), G.chars[id].userData.yOff || 0);
     G.dragState.moved = true;
   });
-  cv.addEventListener('pointerup', function () {
+  cv.addEventListener('pointerup', function (ev) {
     if (!G.dragState) return;
     var st = G.dragState;
     G.dragState = null;
     if (!st.moved || G.phase !== 'answering' || !G.curRound) return;
+    /* v19：按松手时手指落点最近的圈来判（不是按动物出发点附近的圈）；
+       落点离所有圈都远，就把动物送回出发点、温柔提示再试一次，不卡死。 */
+    var pt = groundPoint(ev);
     var best = null, bestD = 1e9;
-    var ap = charPos(st.animal);
-    G.circles.forEach(function (c) {
-      var d = Math.hypot(ap.x - c.x, ap.z - c.z);
-      if (d < bestD) { bestD = d; best = c; }
-    });
-    if (best && bestD < 4) onCircleTap(G.curRound, best);
+    if (pt) {
+      G.circles.forEach(function (c) {
+        var d = Math.hypot(pt.x - c.x, pt.z - c.z);
+        if (d < bestD) { bestD = d; best = c; }
+      });
+    }
+    if (best && bestD < 2.5) onCircleTap(G.curRound, best);
+    else { returnAnimalToStart(G.curRound); wrongPick(G.curRound); }
   });
 }
 
@@ -1766,10 +1901,16 @@ function tick() {
       G.confettiBits.splice(j, 1);
     }
   }
-  /* 圈圈脉动 */
+  /* 圈圈脉动；提示的那个圈跳得更明显 */
   G.circles.forEach(function (c) {
     var s = 1 + Math.sin(now * 0.006 + c.phase) * 0.12;
+    if (c.hintPulse) s = 1.35 + Math.sin(now * 0.01 + c.phase) * 0.25;
     c.ring.scale.set(s, s, 1);
+    if (c.dot) {
+      c.dot.position.y = c.y + 1.5 + Math.sin(now * 0.004 + c.phase) * 0.25;
+      var ds = c.hintPulse ? 1.5 : 1;
+      c.dot.scale.set(ds, ds, ds);
+    }
   });
   /* 云漂移 */
   G.clouds.forEach(function (cl, idx) {
@@ -1782,8 +1923,6 @@ function tick() {
   });
   updateCamTarget();
   updateCamera(dt);
-  G.miniAcc = (G.miniAcc || 0) + dt;
-  if (G.miniAcc > 0.5) { G.miniAcc = 0; drawMinimap(); }
   G.renderer.render(G.scene, G.camera);
 }
 
@@ -1808,7 +1947,7 @@ async function init() {
     setLoad(1, '完成！');
     $('loading').style.display = 'none';
     showOverlay('unlock');
-    window.__v18 = {
+    window.__v19 = {
       game: G, getState: getState, sentenceFor: sentenceText,
       setWords: function (words) { G.selWords = words.slice(); },
       startGame: startGame, setSpeed: function (n) { G.speedMul = n; },
@@ -1829,16 +1968,28 @@ async function init() {
         G.circles.forEach(function (cc) { if (cc.wid === wid) c = cc; });
         return c ? { x: c.x, y: c.y, z: c.z } : null;
       },
-      project: function (x, y, z) {
-        var v = new THREE.Vector3(x, y, z).project(G.camera);
-        var rect = G.renderer.domElement.getBoundingClientRect();
-        return { x: rect.left + (v.x + 1) / 2 * rect.width, y: rect.top + (1 - v.y) / 2 * rect.height };
+      project: function (x, y, z) { return projectToClient(x, y, z); },
+      /* v19 测试用：所有圈的屏幕坐标 + 角色在屏幕上的高度（像素） */
+      placeCircles: function () {
+        return G.circles.map(function (c) {
+          var p = projectToClient(c.x, c.y + 0.4, c.z);
+          return { wid: c.wid, x: c.x, z: c.z, sx: p.x, sy: p.y };
+        });
+      },
+      charScreen: function (id) {
+        var g = G.chars[id];
+        var feet = projectToClient(g.position.x, g.position.y, g.position.z);
+        var head = projectToClient(g.position.x, g.position.y + 3.2, g.position.z);
+        return { id: id, feetX: feet.x, feetY: feet.y, headY: head.y,
+                 heightPx: feet.y - head.y, visible: !feet.behind && feet.y >= 0 && feet.y <= window.innerHeight };
       }
     };
+    window.__v18 = window.__v19;
     window.__v18ready = true;
-    console.log('[v18] ready');
+    window.__v19ready = true;
+    console.log('[v19] ready');
   } catch (e) {
-    console.error('[v18] init failed', e);
+    console.error('[v19] init failed', e);
     var m = $('loadmsg');
     if (m) m.textContent = '加载失败：' + (e && e.message ? e.message : e);
   }

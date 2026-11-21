@@ -40,15 +40,19 @@
   #choices.show { display: flex; }
   .choice { width: 31%; max-width: 160px; background: #fff; border: 3px solid #e5d9f7; border-radius: 16px; overflow: hidden;
     cursor: pointer; box-shadow: 0 4px 14px rgba(0,0,0,.18); }
-  .choice img { width: 100%; height: 84px; object-fit: cover; display: block; background: #8fce6e; }
-  .choice .clabel { font-size: 14px; font-weight: 700; color: #3a2e2a; text-align: center; padding: 5px 2px; line-height: 1.25; }
+  .choice img { width: 100%; height: 128px; object-fit: cover; display: block; background: #8fce6e; }
+  .choice .clabel { font-size: 16px; font-weight: 700; color: #3a2e2a; text-align: center; padding: 6px 2px; line-height: 1.25; }
   .choice.good { border-color: #22c55e; background: #f0fdf4; }
   .choice.bad { border-color: #f59e0b; background: #fffbeb; }
   .choice.pulse { border-color: #ffb703; animation: pulse .5s ease-in-out 4; }
   @keyframes pulse { 50% { transform: scale(1.07); } }
-  /* ---------- 小地图 ---------- */
-  #minimap { position: absolute; right: 8px; bottom: 290px; width: 92px; height: 62px; z-index: 9;
-    border: 2px solid #ffd166; border-radius: 10px; background: rgba(255,255,255,.92); }
+  /* ---------- 中央提示条 ---------- */
+  #toast { position: absolute; left: 50%; top: 38%; transform: translate(-50%, -50%) scale(.9); z-index: 25;
+    background: #7c3aed; color: #fff; font-size: 26px; font-weight: 800; padding: 14px 26px; border-radius: 999px;
+    box-shadow: 0 8px 30px rgba(0,0,0,.3); opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s; white-space: nowrap; }
+  #toast.show { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  #sound-note { display: none; margin-top: 12px; padding: 10px; background: #f0fdf4; color: #15803d;
+    border: 2px solid #86efac; border-radius: 12px; font-size: 16px; font-weight: 800; }
   /* ---------- 遮罩 ---------- */
   .overlay { position: absolute; inset: 0; z-index: 20; background: rgba(30,20,10,.55); display: none;
     align-items: center; justify-content: center; padding: 16px; }
@@ -100,7 +104,7 @@
   </div>
 
   <div id="choices"></div>
-  <canvas id="minimap" width="92" height="62"></canvas>
+  <div id="toast"></div>
 
   <div class="overlay show" id="ov-unlock">
     <div class="card">
@@ -115,18 +119,9 @@
     <div class="card">
       <h1>家长设置</h1>
       <p>今晚练哪个词？可以多选，按顺序来。<br>孩子玩的时候不用认字，听和点就可以。</p>
+      <div id="sound-note">🔊 声音已开</div>
       <div class="wordgrid" id="wordgrid"></div>
       <button class="bigbtn" id="start-btn">开始玩 ▶</button>
-    </div>
-  </div>
-
-  <div class="overlay" id="ov-intro">
-    <div class="card">
-      <h2 id="intro-word">behind · 后面</h2>
-      <div id="intro-stars" style="font-size:22px;color:#f59e0b">☆☆☆☆</div>
-      <h1>彩虹小岛</h1>
-      <p>彩虹小岛很大，有森林、池塘、沙滩、<br>花园和小山，小动物们住在岛上<br>不同的地方。点一点小岛，公主就<br>会走过去；点一点小动物，就能<br>跟它说话！</p>
-      <button class="bigbtn" id="go-btn">▶ 开始逛小岛</button>
     </div>
   </div>
 
