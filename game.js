@@ -1,15 +1,16 @@
 /* ============================================================================
- * 彩虹小岛 · Rainbow Island — v20
- * Three.js 3D 版（v19b 渲染重做：按用户定稿的原型 C“鲜艳动画风”，
- *   像真的在游戏里——真天真光真影子、草有纹理、水会反光、镜头跟在公主身后）。
- * 玩法、词表、语音、流程、人物模型与 v19b 完全相同；只改渲染与场景氛围。
+ * 彩虹小岛 · Rainbow Island — v21
+ * 场景化大改版（v20 的渲染不动）：不选题、不做题，英语长在场景里。
+ * - 打开就是游戏：没有选词屏、没有顶栏词条；词由家长在隐藏设置里定（默认 behind）。
+ * - 每词一个游戏，4 回合 = 4 个小冒险（固定回合表，每次打乱顺序）：
+ *   behind 捉迷藏 / in 躲猫猫 / on 爬高高 / under 躲雨 / next to 比一比 / in front of 敲门。
+ * - 全部预录音（Aria 童声、慢速，assets/audio/，73 条新录音）：
+ *   游戏里彻底不用手机 TTS；一个音频总管、跟读式逐词亮、点下去立刻响、星星跟表扬同时到。
+ * - 丝滑简单：镜头滑、人物走、一次只亮一样、公主先示范、5 秒没动静温柔提示、无失败。
+ * - 多端：去掉 560px 上限，镜头按宽高比自适应，手指鼠标都能玩。
  * - 纯静态：index.html + game.js + three.module.js + assets/audio/，无构建步骤。
  * - 3D 角色全部由 Three.js 几何体拼成（低多边形，v17 配色），腿会真的迈步、
  *   身体会起伏、会转向；公主/动物在岛上走，镜头第三人称跟随。
- * - 玩法与 v17 相同：家长选词（可多选）→ 每词 4 回合（找一找 / 放一放交替）
- *   → 星星 → 完成页 + 回家小任务；语音修复与 v17 相同（horse 用预录音，
- *   其余动物用慢速 TTS 读本动物句子；先读词再读整句；自动播放；答错有语音；
- *   “?” 提示真的高亮；换词立即刷新）。
  * ========================================================================== */
 'use strict';
 
@@ -31,10 +32,7 @@ var CHARS = {
   'bird':  { id: 'bird',  en: 'bird',  zh: '小鸟', zone: '池塘' }
 };
 var CHAR_IDS = ['horse', 'cat', 'dog', 'bear', 'bird'];
-var CHAR_GREETING = {
-  'horse': 'Neigh! Hello!', 'cat': 'Meow! Hello!', 'dog': 'Woof! Hello!',
-  'bear': 'Hello! I am a bear!', 'bird': 'Tweet! Hello!'
-};
+/* v21：动物打招呼不再用 TTS，全部是预录 greet-<animal>.mp3（Aria 童声） */
 /* v17 的 % 坐标 → 3D 世界坐标（岛约 116×116，北 = -z） */
 function px(pct) { return (pct - 50) / 50 * 58; }
 function pz(pct) { return (pct - 50) / 50 * 58; }
@@ -46,15 +44,50 @@ var SPOTS = {
   'bridge': { id: 'bridge', en: 'bridge', zh: '小桥', x: 50, y: 52, zone: '池塘' },
   'table':  { id: 'table',  en: 'table',  zh: '桌子', x: 10, y: 64, zone: '小屋' },
   'flower': { id: 'flower', en: 'flower', zh: '花',   x: 82, y: 44, zone: '花园' },
-  'rock':   { id: 'rock',   en: 'rock',   zh: '石头', x: 58, y: 90, zone: '沙滩' }
+  'rock':   { id: 'rock',   en: 'rock',   zh: '石头', x: 58, y: 90, zone: '沙滩' },
+  /* v21 新增：沙滩伞（躲雨用）、花园灌木丛（捉迷藏用） */
+  'umbrella': { id: 'umbrella', en: 'umbrella', zh: '雨伞', x: 74, y: 90, zone: '沙滩' },
+  'bush':   { id: 'bush',   en: 'bush',   zh: '灌木丛', x: 62, y: 30, zone: '花园' }
 };
-var ROUND_SPOTS = {
-  'in':      ['basket', 'box', 'house'],
-  'on':      ['box', 'bridge', 'rock'],
-  'under':   ['tree', 'bridge'],
-  'nextto':  ['flower', 'house', 'tree'],
-  'behind':  ['tree', 'house'],
-  'front':   ['tree', 'house']
+/* v21：固定回合表——每词 4 个小冒险（动物 / 地点 / 玩法都定死，顺序每次打乱）。
+   find = 动物自己藏好，孩子点一点找出来；place = 公主请孩子帮忙，把动物送到地方去。 */
+var ROUND_PLANS = {
+  'behind': [
+    { animal: 'cat',   spot: 'tree',  type: 'find'  },
+    { animal: 'dog',   spot: 'house', type: 'place' },
+    { animal: 'bear',  spot: 'rock',  type: 'find'  },
+    { animal: 'horse', spot: 'bush',  type: 'place' }
+  ],
+  'in': [
+    { animal: 'bear', spot: 'basket', type: 'find'  },
+    { animal: 'cat',  spot: 'box',    type: 'place' },
+    { animal: 'dog',  spot: 'house',  type: 'find'  },
+    { animal: 'bird', spot: 'box',    type: 'place' }
+  ],
+  'on': [
+    { animal: 'dog',   spot: 'rock',   type: 'find'  },
+    { animal: 'cat',   spot: 'bridge', type: 'place' },
+    { animal: 'horse', spot: 'box',    type: 'find'  },
+    { animal: 'bird',  spot: 'table',  type: 'place' }
+  ],
+  'under': [
+    { animal: 'bird',  spot: 'umbrella', type: 'find'  },
+    { animal: 'cat',   spot: 'tree',     type: 'place' },
+    { animal: 'dog',   spot: 'bridge',   type: 'find'  },
+    { animal: 'horse', spot: 'umbrella', type: 'place' }
+  ],
+  'nextto': [
+    { animal: 'horse', spot: 'flower', type: 'find'  },
+    { animal: 'cat',   spot: 'house',  type: 'place' },
+    { animal: 'dog',   spot: 'tree',   type: 'find'  },
+    { animal: 'bird',  spot: 'flower', type: 'place' }
+  ],
+  'front': [
+    { animal: 'dog',   spot: 'house', type: 'find'  },
+    { animal: 'cat',   spot: 'tree',  type: 'place' },
+    { animal: 'horse', spot: 'house', type: 'find'  },
+    { animal: 'bird',  spot: 'tree',  type: 'place' }
+  ]
 };
 var MISSIONS = {
   'in':     '把小熊放进盒子里，只露出小脑袋，再问孩子：Where is the bear?',
@@ -80,7 +113,75 @@ var WANDER_ZONES = {
 function sentenceText(wordId, animalId, spotId) {
   return 'The ' + CHARS[animalId].en + ' is ' + WORDS[wordId].en + ' the ' + SPOTS[spotId].en + '.';
 }
-function sentenceKey(wordId, spotId) { return 'sent-' + wordId + '-' + spotId; }
+/* ---------------- 预录音键名与台词（assets/audio/，Aria 童声，73 条） ----------------
+   发现句是找到小动物那一刻的欢呼，不是考题答案：“There you are! The cat is behind the tree!” */
+function discKey(r) { return 'disc-' + r.animal + '-' + r.word + '-' + r.spot; }
+function discText(r) {
+  return 'There you are! The ' + CHARS[r.animal].en + ' is ' + WORDS[r.word].en + ' the ' + SPOTS[r.spot].en + '!';
+}
+var ANIMAL_SOUND = { horse: 'Neigh!', cat: 'Meow!', dog: 'Woof!', bear: 'Hello!', bird: 'Tweet!' };
+function greetText(a) { return 'Hi, little ' + CHARS[a].en + '!'; }
+function whereText(a) { return 'Where is the ' + CHARS[a].en + '?'; }
+function hideText(a) { return ANIMAL_SOUND[a] + ' I hide, you find me!'; }
+function hideinText(spot) { return 'I hide in the ' + SPOTS[spot].en + '! Find me!'; }
+function onmeText(spot) { return 'Look at me! I am on the ' + SPOTS[spot].en + '!'; }
+function quickText(a, spot) { return 'Quick, little ' + CHARS[a].en + '! Hide under the ' + SPOTS[spot].en + '!'; }
+function frontmeText(a, spot) {
+  return ANIMAL_SOUND[a] + " It's me! I am in front of the " + SPOTS[spot].en + '!';
+}
+var CLIP_TEXTS = {
+  'intro': "Hi! I'm Rainbow Princess! Let's play!",
+  'count': 'One, two, three!',
+  'helpme': 'Can you help me?',
+  'tryagain': 'Try again!',
+  'yay': 'Yay!',
+  'peekaboo': 'Peekaboo!',
+  'praise': 'Great job!',
+  'finish': 'Great job! You did it.',
+  'invite-behind': "Let's play hide-and-seek!",
+  'invite-in': "Let's play peekaboo!",
+  'invite-on': "Let's climb up high!",
+  'invite-under': "Oh no! It's raining!",
+  'invite-nextto': "Let's see who is taller!",
+  'invite-front': 'Knock, knock! Who is there?',
+  'standnext': 'Stand next to me!'
+};
+/* 动物藏好 / 爬好 / 躲好后那句“行动台词”的键名 */
+function actionKey(r) {
+  if (r.word === 'behind') return 'hide-' + r.animal;
+  if (r.word === 'in') return 'hidein-' + r.spot;
+  if (r.word === 'on') return 'onme-' + r.spot;
+  if (r.word === 'under') return (r.type === 'place') ? 'quick-' + r.animal + '-' + r.spot : 'hide-' + r.animal;
+  if (r.word === 'nextto') return 'standnext';
+  if (r.word === 'front') return 'frontme-' + r.animal + '-' + r.spot;
+  return 'hide-' + r.animal;
+}
+function actionText(r) {
+  if (r.word === 'behind') return hideText(r.animal);
+  if (r.word === 'in') return hideinText(r.spot);
+  if (r.word === 'on') return onmeText(r.spot);
+  if (r.word === 'under') return (r.type === 'place') ? quickText(r.animal, r.spot) : hideText(r.animal);
+  if (r.word === 'nextto') return 'Stand next to me!';
+  if (r.word === 'front') return frontmeText(r.animal, r.spot);
+  return hideText(r.animal);
+}
+/* 任一录音键对应的台词文字（跟读逐词亮用）；r 是当前回合 */
+function clipText(key, r) {
+  if (CLIP_TEXTS[key]) return CLIP_TEXTS[key];
+  if (key.indexOf('disc-') === 0 && r) return discText(r);
+  if (key.indexOf('greet-') === 0) return greetText(key.slice(6));
+  if (key.indexOf('where-') === 0) return whereText(key.slice(6));
+  if (key.indexOf('hide-') === 0) return hideText(key.slice(5));
+  if (key.indexOf('hidein-') === 0) return hideinText(key.slice(7));
+  if (key.indexOf('onme-') === 0) return onmeText(key.slice(5));
+  if (key.indexOf('quick-') === 0 && r) return quickText(r.animal, r.spot);
+  if (key.indexOf('frontme-') === 0 && r) return frontmeText(r.animal, r.spot);
+  if (key.indexOf('word-') === 0) {
+    var wid = key.slice(5).replace('_', '');
+    return (WORDS[wid] ? WORDS[wid].en : key) + '!';
+  }
+  return '';
+}
 function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 function shuffle(arr) {
   var a = arr.slice();
@@ -103,23 +204,6 @@ function wordOffset3D(wordId) {
     default:       return { dx: 0,    dz: 0,    dy: 0,     cls: '' };
   }
 }
-function circleOffset3D(wordId, spotId) {
-  /* v20：behind + 房子时圈移到房子东侧外面——圈在 (2.0, -2.6) 会被后墙整个挡住，
-     低镜头下孩子根本看不见目标圈；移到 (2.8, -1.2) 就露在墙外，
-     正好也是动物放好后探出来的位置（见 placeAnimalAtSpot 的 behind 房子偏移）。 */
-  if (wordId === 'behind' && spotId === 'house') return { dx: 2.8, dz: -1.2 };
-  switch (wordId) {
-    case 'in':     return { dx: 0,    dz: 0 };
-    case 'on':     return { dx: 0,    dz: -0.5 };
-    case 'under':  return { dx: -2.6, dz: 1.8 };
-    case 'nextto': return { dx: 2.9,  dz: 0 };
-    case 'behind': return { dx: 2.0,  dz: -2.6 };
-    case 'front':  return { dx: 0,    dz: 2.7 };
-    default:       return { dx: 0,    dz: 0 };
-  }
-}
-function miniOffset3D(wordId) { return wordOffset3D(wordId); }
-
 /* ---------------- Three.js 加载（本地优先，失败回退 CDN） ---------------- */
 var THREE = null;
 async function loadThree() {
@@ -172,10 +256,13 @@ function terrainH(x, z) {
 var G = {
   renderer: null, scene: null, camera: null, clock: null,
   chars: {}, spots: {}, spotMeshes: {},
-  selWords: ['behind'], rounds: [], roundIdx: 0, stars: 0, wrongCount: 0,
+  selWord: 'behind', rounds: [], roundIdx: 0, stars: 0, wrongCount: 0,
   curRound: null, seqToken: 0, phase: 'idle', dialogueBusy: false,
   wanderOn: true, wanderTimers: {}, movers: {}, speedMul: 1,
-  lastSpoken: [], audioUnlocked: false, audioQueue: [], audioBusy: false,
+  lastSpoken: [], audioLog: [], audioUnlocked: false, audioQueue: [], audioBusy: false,
+  audioCtx: null, audioEls: {}, karaTimers: [], lastClipKey: null, lastClipText: null,
+  targetGlow: null, targetSpot: null, idleTimer: null, idleHints: 0,
+  rain: null, petals: [], flyby: null, flybyTimer: 0,
   modeIdx: 0, MODES: ['day', 'sunset', 'night'],
   camFocus: null, camOffset: null, camTarget: null,
   circles: [], hintRing: null, confettiBits: [], clouds: [], stars3d: [],
@@ -187,9 +274,9 @@ var G = {
 G.camFocus = { x: 0, y: 1, z: 8 };
 /* v20：镜头更低更近，第三人称跟在公主身后——人在岛里头，不是俯视沙盘。
    俯角约 11°（原来约 28°）：地平线进到画面上部，天空占画面上部约三成，
-   海水和沙滩铺在前景；公主和目标仍在画面中央，圈圈和卡片不被挡。
-   距离 13 是竖屏视野能装下三个圈的底线（再近，最西边的圈会出画）。
-   回合可读性不变：snapCameraTo 仍立刻切过去。 */
+   海水和沙滩铺在前景；公主和目标仍在画面中央。
+   距离 13 是竖屏视野的底线（再近，目标会出画）。
+   v21：镜头改成滑过去（glideCameraTo + updateCamera 缓动），不瞬移。 */
 G.camOffset = { x: 0, y: 4.0, z: 13 };
 G.camTarget = { x: 0, y: 1, z: 8 };
 G.camMode = 'follow'; G.followId = 'princess';
@@ -401,7 +488,26 @@ function resize() {
   if (!w || !h) return;
   G.renderer.setSize(w, h, false);
   G.camera.aspect = w / h;
+  /* v21：镜头按宽高比自适应——竖屏手机保持原来的跟随取景；
+     横屏（电脑 / 学习机）拉宽视野、往后退，公主、动物、目标点全在画面里。 */
+  applyFraming();
   G.camera.updateProjectionMatrix();
+}
+/* 横屏拉宽、竖屏拉近；只改取景，不改游戏内容 */
+function applyFraming() {
+  var aspect = G.camera.aspect || 1;
+  if (aspect > 1.25) {
+    G.camera.fov = 64;
+    G.camOffset.y = 4.6; G.camOffset.z = 16.5;
+  } else if (aspect > 0.9) {
+    G.camera.fov = 58;
+    G.camOffset.y = 4.4; G.camOffset.z = 15.5;
+  } else {
+    /* v21：竖屏再往后退一点（z 13→15）——手机横向视野只有约 27°，
+       退后两步，站在地点两边的公主和小动物才不会被切出画面 */
+    G.camera.fov = 55;
+    G.camOffset.y = 4.4; G.camOffset.z = 15;
+  }
 }
 
 function buildTerrain() {
@@ -651,10 +757,20 @@ function makePebble() {
   g.add(m);
   return g;
 }
+/* v21：沙滩伞——躲雨游戏里小鸟藏在伞下面 */
+function makeUmbrella() {
+  var g = new THREE.Group();
+  g.add(cyl(0.07, 0.07, 2.6, 0x8a6a2e, 0, 1.3, 0, 8));       /* 伞杆 */
+  g.add(cone(1.9, 0.9, 0xef4444, 0, 2.9, 0, 12));              /* 红色伞面 */
+  g.add(sph(0.14, 0xffd43b, 0, 3.4, 0));                       /* 伞尖小球 */
+  g.userData.topY = 3.4;
+  return g;
+}
 var SPOT_BUILDERS = {
   tree: function () { return makeTree(1.15); },
   house: makeHouse, box: makeBox, basket: makeBasket, bridge: makeBridge,
-  table: makeTable, flower: function () { return makeFlower(0xff6b9d); }, rock: function () { return makeRock(1.1); }
+  table: makeTable, flower: function () { return makeFlower(0xff6b9d); }, rock: function () { return makeRock(1.1); },
+  umbrella: makeUmbrella, bush: function () { return makeBush(1.3); }
 };
 
 /* v20：蝴蝶——两片翅膀扇动，围着花丛飞 */
@@ -708,6 +824,9 @@ function buildIsland() {
     var label = makeTextSprite(sp.zh, '#5b4636');
     label.position.set(x, terrainH(x, z) + (g.userData.topY || 1) + 1.1, z);
     G.scene.add(label);
+    /* v21：牌子离镜头太近会糊满屏——tick 里按镜头距离淡出，这里先记下来 */
+    if (!G.labels) G.labels = [];
+    G.labels.push(label);
   });
 
   /* 装饰：森林的树、花园的花、沙滩的石子、草丛（确定性随机） */
@@ -769,6 +888,51 @@ function buildIsland() {
   G.scene.add(pollen);
   G.pollen = pollen;
   G.pollenBase = pBase;
+
+  /* v21：下雨（只在 under 躲雨回合里出现）——160 条雨丝，一次画完 */
+  var rCount = 160;
+  var rGeo = new THREE.BufferGeometry();
+  var rPos = new Float32Array(rCount * 3);
+  var rRnd = RNG(31337);
+  for (var ri = 0; ri < rCount; ri++) {
+    rPos[ri * 3] = -40 + rRnd() * 80;
+    rPos[ri * 3 + 1] = rRnd() * 22;
+    rPos[ri * 3 + 2] = -40 + rRnd() * 80;
+  }
+  rGeo.setAttribute('position', new THREE.BufferAttribute(rPos, 3));
+  var rain = new THREE.Points(rGeo, new THREE.PointsMaterial({
+    color: 0x9fd8ff, size: 0.28, transparent: true, opacity: 0.55, depthWrite: false }));
+  rain.visible = false;
+  G.scene.add(rain);
+  G.rain = rain;
+
+  /* v21：花瓣飘——10 片粉色花瓣在花园上空慢慢飘落 */
+  for (var pi4 = 0; pi4 < 10; pi4++) {
+    var pm = new THREE.SpriteMaterial({ map: softDotTex(), color: 0xf9a8d4, transparent: true, opacity: 0.85, depthWrite: false });
+    var ps = new THREE.Sprite(pm);
+    ps.scale.set(0.7, 0.5, 1);
+    ps.position.set(10 + rRnd() * 40, 2 + rRnd() * 8, -20 + rRnd() * 30);
+    G.scene.add(ps);
+    G.petals.push({ sprite: ps, phase: rRnd() * 6.28, speed: 0.25 + rRnd() * 0.3, x0: ps.position.x, z0: ps.position.z, y0: ps.position.y });
+  }
+
+  /* v21：飞过的小鸟——每隔一阵子从天边飞过去 */
+  var fb = new THREE.Group();
+  var fbMat = new THREE.MeshBasicMaterial({ color: 0x343a40, side: THREE.DoubleSide });
+  var fbWings = {};
+  [-1, 1].forEach(function (side) {
+    var pivot = new THREE.Group();
+    var w = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 0.45), fbMat);
+    w.position.x = side * 0.6;
+    pivot.add(w);
+    fb.add(pivot);
+    fbWings[side < 0 ? 'L' : 'R'] = pivot;
+  });
+  fb.userData.wings = fbWings;
+  fb.visible = false;
+  G.scene.add(fb);
+  G.flyby = fb;
+  G.flybyTimer = 6;
 }
 /* 中文小牌子：canvas 纹理 sprite，永远朝向镜头 */
 function makeTextSprite(text, color) {
@@ -1124,67 +1288,160 @@ function walkPrincessTo(x, z, speed) {
   return moveTo('princess', c.x, c.z, speed || 8);
 }
 
-/* ---------------- 音频：horse 用预录音，其余动物用慢速 TTS（v17 修复逻辑） ---------------- */
-var AUDIO_KEYS = ['finish', 'praise', 'silence',
-  'sent-behind-house', 'sent-behind-mountain', 'sent-behind-tree',
-  'sent-front-house', 'sent-front-mountain', 'sent-front-tree',
-  'sent-in-basket', 'sent-in-box', 'sent-in-house',
-  'sent-nextto-flower', 'sent-nextto-house', 'sent-nextto-mountain', 'sent-nextto-tree',
-  'sent-on-box', 'sent-on-bridge', 'sent-on-mountain', 'sent-on-rock',
-  'sent-under-bridge', 'sent-under-tree', 'sent-under-umbrella',
+/* ---------------- 音频总管 v21：全部预录音，一个声音，一个队列 ----------------
+   游戏里彻底不用手机 TTS。所有台词都是 Aria 童声预录的 MP3（assets/audio/，73 条）。
+   - 一个队列、一次只响一个；按真实播完事件推进（ended 事件 + 按时长算的安全超时，
+     不再用 6 秒瞎等）；换句时淡出，不生切。
+   - 跟读：台词按词逐个亮；动物名响时动物亮、地点词响时地点亮（按字符位置估算时间）。
+   - 点下去立刻响：ding 用 WebAudio 现场合成（<50ms），不经过文件。 */
+var COMMON_CLIPS = ['intro', 'count', 'helpme', 'tryagain', 'yay', 'peekaboo', 'praise', 'finish',
   'word-behind', 'word-front', 'word-in_', 'word-nextto', 'word-on', 'word-under'];
-function playClip(key) {
-  return new Promise(function (res) {
-    var done = false;
-    function fin() { if (!done) { done = true; res(); } }
-    try {
-      var a = new Audio('assets/audio/' + key + '.mp3');
-      a.onended = fin; a.onerror = fin;
-      var p = a.play();
-      if (p && p.catch) p.catch(fin);
-      setTimeout(fin, 6000);
-    } catch (e) { fin(); }
-  });
-}
-function speakTTS(text, rate) {
-  G.lastSpoken.push({ kind: 'tts', text: text, rate: rate || 0.7 });
-  console.log('[TTS]', text);
-  return new Promise(function (res) {
-    var done = false;
-    function fin() { if (!done) { done = true; res(); } }
-    try {
-      if (typeof window.speechSynthesis === 'undefined') { fin(); return; }
-      var u = new SpeechSynthesisUtterance(text);
-      u.lang = 'en-US'; u.rate = rate || 0.7; u.pitch = 1.1;
-      var voices = window.speechSynthesis.getVoices();
-      for (var i = 0; i < voices.length; i++) {
-        if (voices[i].lang && voices[i].lang.indexOf('en') === 0) { u.voice = voices[i]; break; }
-      }
-      u.onend = fin; u.onerror = fin;
-      window.speechSynthesis.cancel();
-      setTimeout(function () { try { window.speechSynthesis.speak(u); } catch (e2) { fin(); } }, 80);
-      setTimeout(fin, 6000);
-    } catch (e) { fin(); }
-  });
-}
-function playWord(wordId) {
-  var w = WORDS[wordId];
-  G.lastSpoken.push({ kind: 'word', word: wordId, text: w.en });
-  return playClip(w.clip);
-}
-function playSentence(round) {
-  var key = sentenceKey(round.word, round.spot);
-  var text = sentenceText(round.word, round.animal, round.spot);
-  if (round.animal === 'horse') {
-    G.lastSpoken.push({ kind: 'clip', key: key, text: text });
-    return playClip(key);
+function audioEl(key) {
+  if (!G.audioEls[key]) {
+    var a = new Audio('assets/audio/' + key + '.mp3');
+    a.preload = 'auto';
+    G.audioEls[key] = a;
   }
-  return speakTTS(text, 0.7);
+  return G.audioEls[key];
 }
-async function playQuestionAudio(round) {
-  await playWord(round.word);
-  await sleep(500);
-  await playSentence(round);
+/* 录音时长（缓存；拿不到就按慢速每词 0.45 秒估算，跟读和超时都靠它） */
+function clipDuration(key, fallbackText) {
+  if (G.clipDur && G.clipDur[key]) return Promise.resolve(G.clipDur[key]);
+  var a = audioEl(key);
+  if (a.duration && isFinite(a.duration) && a.duration > 0) {
+    if (!G.clipDur) G.clipDur = {};
+    G.clipDur[key] = a.duration;
+    return Promise.resolve(a.duration);
+  }
+  return new Promise(function (res) {
+    var done = false;
+    function fin(v) { if (!done) { done = true; res(v); } }
+    a.addEventListener('loadedmetadata', function () { fin(a.duration || 0); }, { once: true });
+    a.addEventListener('error', function () { fin(0); }, { once: true });
+    setTimeout(function () { fin(0); }, 1500);
+  }).then(function (d) {
+    if (!d || d <= 0) {
+      var n = (fallbackText || '').split(/\s+/).filter(Boolean).length || 4;
+      d = 0.5 + n * 0.45;
+    }
+    if (!G.clipDur) G.clipDur = {};
+    G.clipDur[key] = d;
+    return d;
+  });
+}
+function ensureAudioCtx() {
+  if (!G.audioCtx) {
+    try { G.audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { G.audioCtx = null; }
+  }
+  if (G.audioCtx && G.audioCtx.state === 'suspended') G.audioCtx.resume();
+  return G.audioCtx;
+}
+/* ding：WebAudio 现场合成的清脆双音，不经过文件，点下去立刻响 */
+function ding() {
+  try {
+    var ctx = ensureAudioCtx();
+    if (!ctx) return;
+    var t0 = ctx.currentTime;
+    [[880, 0], [1318.5, 0.09]].forEach(function (nd) {
+      var o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = 'sine'; o.frequency.value = nd[0];
+      g.gain.setValueAtTime(0.0001, t0 + nd[1]);
+      g.gain.exponentialRampToValueAtTime(0.25, t0 + nd[1] + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + nd[1] + 0.45);
+      o.connect(g); g.connect(ctx.destination);
+      o.start(t0 + nd[1]); o.stop(t0 + nd[1] + 0.5);
+    });
+  } catch (e) { /* 没声音也不许报错 */ }
+}
+/* 预热：开声音那一下就把今晚要用的录音都解码好（最多等 2.5 秒，不堵） */
+async function preloadClips(wordId) {
+  var keys = COMMON_CLIPS.slice();
+  (ROUND_PLANS[wordId] || []).forEach(function (r) {
+    r.word = wordId;
+    [discKey(r), 'greet-' + r.animal, 'where-' + r.animal, actionKey(r)].forEach(function (k) {
+      if (keys.indexOf(k) < 0) keys.push(k);
+    });
+  });
+  keys.push('invite-' + wordId);
+  var jobs = keys.map(function (k) {
+    var a = audioEl(k);
+    try { a.load(); } catch (e) {}
+    return clipDuration(k, '').catch(function () { return 0; });
+  });
+  await Promise.race([Promise.all(jobs), sleep(2500)]);
+}
+/* 停掉当前声音，清掉跟读计时和队列（换回合 / 进家长设置时用） */
+function stopAudioNow() {
+  G.karaTimers.forEach(function (t) { clearTimeout(t); });
+  G.karaTimers = [];
+  if (G.audioCurrent) {
+    var a = G.audioCurrent;
+    G.audioCurrent = null;
+    try { a.pause(); a.currentTime = 0; } catch (e) {}
+  }
+  G.audioQueue = [];
+  G.audioBusy = false;
+}
+/* 播一条录音（排队，一次一个）。opts: {text, words, kara, onStart, onWord} */
+function playClip(key, opts) {
+  opts = opts || {};
+  return new Promise(function (resolve) {
+    G.audioQueue.push({ key: key, opts: opts, resolve: resolve });
+    pumpAudio();
+  });
+}
+function pumpAudio() {
+  if (G.audioBusy || !G.audioQueue.length) return;
+  var job = G.audioQueue.shift();
+  G.audioBusy = true;
+  var a = audioEl(job.key);
+  var text = job.opts.text || '';
+  var words = job.opts.words || (text ? text.split(/\s+/).filter(Boolean) : []);
+  G.lastSpoken.push({ kind: 'clip', key: job.key, text: text });
+  G.audioLog.push({ key: job.key, t: Math.round(performance.now()), kind: 'clip' });
+  G.lastClipKey = job.key; G.lastClipText = text; G.lastClipName = job.opts.name || '彩虹公主';
+  var done = false;
+  function fin() {
+    if (done) return; done = true;
+    G.karaTimers.forEach(function (t) { clearTimeout(t); });
+    G.karaTimers = [];
+    if (G.audioCurrent === a) G.audioCurrent = null;
+    G.audioBusy = false;
+    try { a.onended = null; a.onerror = null; } catch (e) {}
+    job.resolve();
+    pumpAudio();
+  }
+  clipDuration(job.key, text).then(function (dur) {
+    /* 跟读计时：按字符位置估算每个词开始的时间 */
+    if (job.opts.kara && words.length) {
+      var totalChars = 0;
+      words.forEach(function (w) { totalChars += w.length; });
+      var acc = 0;
+      words.forEach(function (w, i) {
+        var frac = totalChars ? acc / totalChars : i / words.length;
+        acc += w.length;
+        var t = Math.max(0, (frac * dur - 0.05)) * 1000;
+        G.karaTimers.push(setTimeout(function () { if (job.opts.onWord) job.opts.onWord(i); }, t));
+      });
+    }
+    var safety = setTimeout(fin, Math.max(600, dur * 1000 + 600));
+    a.onended = function () { clearTimeout(safety); fin(); };
+    a.onerror = function () { clearTimeout(safety); fin(); };
+    G.audioCurrent = a;
+    try {
+      a.currentTime = 0;
+      var p = a.play();
+      if (p && p.catch) p.catch(function () { clearTimeout(safety); fin(); });
+    } catch (e) { clearTimeout(safety); fin(); }
+    if (job.opts.onStart) job.opts.onStart();
+  });
+}
+/* 读一个单词（先读词再读整句的老规矩还在：词卡没了，词在对话栏里单独亮出来） */
+function sayWord(wordId) {
+  var w = WORDS[wordId];
+  return playClip(w.clip, { text: w.en + '!', words: [w.en], kara: true,
+    onStart: function () { jumpChar('princess', 0.25); },
+    onWord: function (i) { lightWord(i); } });
 }
 
 /* ---------------- 对话（DOM） ---------------- */
@@ -1221,21 +1478,44 @@ function parseSegments(textHtml) {
   if (segments.length === 0) segments.push({ t: textHtml, key: false });
   return segments;
 }
-async function sayLine(speakerId, textHtml, audio) {
-  if (G.dialogueBusy) return;
-  G.dialogueBusy = true;
-  try {
-    var name = speakerId === 'princess' ? '彩虹公主' : CHARS[speakerId].zh;
-    setDialogue(speakerId, name, parseSegments(textHtml));
-    var c = G.chars[speakerId];
-    if (c) jumpChar(speakerId, 0.25);
-    if (audio && audio.clip) await playClip(audio.clip);
-    else if (audio && audio.tts) await speakTTS(audio.tts, 0.75);
-    else await sleep(700);
-  } finally {
-    G.dialogueBusy = false;
-  }
-  await sleep(150);
+/* v21：跟读式对话——台词按词逐个亮，正在读的词变紫；公主在声音开始那一刻才跳 */
+function setDialogueKaraoke(speakerId, name, words) {
+  var avatar = $('avatar');
+  avatar.src = 'assets/princess.png';
+  $('dlg-name').textContent = name || '彩虹公主';
+  var el = $('dlg-text');
+  el.innerHTML = words.map(function (w, i) {
+    return '<span class="w" data-i="' + i + '">' + esc(w) + '</span>';
+  }).join(' ');
+}
+function lightWord(i) {
+  var el = $('dlg-text');
+  var spans = el.querySelectorAll('.w');
+  spans.forEach(function (sp, j) {
+    sp.classList.toggle('lit', j === i);
+    sp.classList.toggle('done', j < i);
+  });
+}
+function setHint(t) { $('dlg-hint').textContent = t || ''; }
+/* 说一句台词：opts {speaker, name, text, hint, round, onWord(i, word)} */
+async function sayClip(key, opts) {
+  opts = opts || {};
+  var text = opts.text || clipText(key, opts.round) || '';
+  var words = text.split(/\s+/).filter(Boolean);
+  var speaker = opts.speaker || 'princess';
+  var name = opts.name || (speaker === 'princess' ? '彩虹公主' : CHARS[speaker].zh);
+  setDialogueKaraoke(speaker, name, words);
+  if (opts.hint !== undefined) setHint(opts.hint);
+  var charId = (speaker === 'princess' || !G.chars[speaker]) ? 'princess' : speaker;
+  await playClip(key, {
+    text: text, words: words, kara: true, name: name,
+    onStart: function () { jumpChar(charId, 0.25); },
+    onWord: function (i) {
+      lightWord(i);
+      if (opts.onWord) opts.onWord(i, words[i]);
+    }
+  });
+  await sleep(120);
 }
 /* 小跳：tween 列表驱动 */
 function jumpChar(id, h) {
@@ -1255,38 +1535,11 @@ function princessWave() {
 G.tweens = [];
 
 /* ---------------- 位置摆放 ---------------- */
-function placeAnimalAtSpot(animalId, spot, wordId) {
-  var off = wordOffset3D(wordId);
-  /* under the bridge：站在桥拱正下方（池塘里），不是桥南边 */
-  if (wordId === 'under' && spot.id === 'bridge') off = { dx: 0, dz: 0, dy: 0, cls: '' };
-  /* v20：behind + 房子时往旁边多挪一点——房子 3.6 宽，dx 1.2 还在房子轮廓里，
-     低镜头下动物会被屋顶整个挡住；挪到 2.6 就从房子侧边探出来，看得见。
-     大树细，dx 1.2 就够，不用动。 */
-  if (wordId === 'behind' && spot.id === 'house') off = { dx: 2.6, dz: off.dz, dy: off.dy, cls: off.cls };
-  var g = G.chars[animalId];
-  stopMoving(animalId);
-  var sx = G.spots[spot.id].x, sz = G.spots[spot.id].z;
-  var x = clamp(sx + off.dx, -56, 56), z = clamp(sz + off.dz, -56, 56);
-  var yOff = off.dy || 0;
-  /* in the house：房子是开面的，动物站在屋里正中，不用下沉；盒子/篮子才下沉半身 */
-  if (off.cls === 'inbox' && spot.id === 'house') yOff = 0;
-  if (off.cls === 'on') yOff = (G.spots[spot.id].topY - terrainH(x, z)) + 0.05;
-  /* v20：放进篮子/盒子时把容器放大 1.35 倍——低镜头下动物会把小容器整个挡住，
-     放大后篮沿/盒沿露在动物身体两侧，“in” 才看得见；回合结束清掉时恢复。 */
-  if (off.cls === 'inbox' && (spot.id === 'basket' || spot.id === 'box')) {
-    var sg = G.spotMeshes[spot.id];
-    if (sg) { sg.userData._v20scaled = true; sg.scale.setScalar(1.35); }
-  }
-  g.userData.yOff = yOff;
-  g.userData.placed = off.cls;
-  setCharPos(animalId, x, z, yOff);
-  g.rotation.y = 0;
-}
-/* v20：恢复被放大的篮子/盒子（见 placeAnimalAtSpot 的 in 放大） */
+/* v21：恢复被放大的篮子/盒子（见 placeAnimalFinal 的 in 放大） */
 function restoreSpotScale() {
   Object.keys(G.spotMeshes).forEach(function (id) {
     var sg = G.spotMeshes[id];
-    if (sg && sg.userData._v20scaled) { sg.scale.setScalar(1); sg.userData._v20scaled = false; }
+    if (sg && (sg.userData._v21scaled || sg.userData._v20scaled)) { sg.scale.setScalar(1); sg.userData._v21scaled = false; sg.userData._v20scaled = false; }
   });
 }
 function clearPlacement(animalId) {
@@ -1327,7 +1580,7 @@ function startWander(id) {
   if (G.wanderTimers[id]) return;
   function loop() {
     if (!G.wanderOn) { G.wanderTimers[id] = setTimeout(loop, 1200); return; }
-    if (G.phase === 'dialogue' || G.phase === 'answering' || G.phase === 'celebrating') {
+    if (G.phase === 'story' || G.phase === 'waiting' || G.phase === 'celebrating') {
       G.wanderTimers[id] = setTimeout(loop, 1500); return;
     }
     if (G.curRound && G.curRound.animal === id) { G.wanderTimers[id] = setTimeout(loop, 1500); return; }
@@ -1351,15 +1604,7 @@ function setCamFocus(x, y, z) {
   G.camMode = 'fixed';
   G.camTarget.x = x; G.camTarget.y = y; G.camTarget.z = z;
 }
-/* v19：镜头立刻切过去（不慢慢平移），回合一开始画面里就有人有动物 */
-function snapCameraTo(x, y, z) {
-  G.camMode = 'fixed';
-  G.camTarget.x = x; G.camTarget.y = y; G.camTarget.z = z;
-  G.camFocus.x = x; G.camFocus.y = y; G.camFocus.z = z;
-  G.camera.position.set(x + G.camOffset.x, y + G.camOffset.y, z + G.camOffset.z);
-  G.camera.lookAt(x, y, z);
-}
-/* 3D 点 → 屏幕像素坐标（供点圈圈、测试用） */
+/* 3D 点 → 屏幕像素坐标（供点按判、测试用） */
 function projectToClient(x, y, z) {
   G.camera.updateMatrixWorld();
   var v = new THREE.Vector3(x, y, z).project(G.camera);
@@ -1388,293 +1633,392 @@ function updateCamera(dt) {
   G.camera.lookAt(G.camFocus.x, G.camFocus.y, G.camFocus.z);
 }
 
-/* ---------------- 回合 ---------------- */
+/* ---------------- 回合：故事，不是考试 ----------------
+   每回合固定时间线：镜头滑过去 → 公主走过去打招呼 → 邀请玩游戏 → 读一遍词
+   → 动物藏好 / 请孩子帮忙 → 公主数数、问一句 → 孩子找一找 / 帮一帮
+   → 发现句（找到的欢呼）→ 表扬 + 星星同时到 → 下一回合。
+   全程没有选择卡、没有顶栏词条、没有“考一考”。 */
 function buildRounds(wordId) {
-  var spots = ROUND_SPOTS[wordId] || ROUND_SPOTS.behind;
-  var animals = shuffle(CHAR_IDS).slice(0, 4);
-  var rs = [];
-  for (var i = 0; i < 4; i++) {
-    rs.push({ word: wordId, animal: animals[i], spot: spots[i % spots.length],
-              type: (i % 2 === 0) ? 'find' : 'place', idx: i });
-  }
-  return rs;
+  var plan = ROUND_PLANS[wordId] || ROUND_PLANS.behind;
+  return shuffle(plan.map(function (p, i) {
+    return { word: wordId, animal: p.animal, spot: p.spot, type: p.type, idx: i };
+  }));
 }
-function sentenceSegments(wordId, animalId, spotId) {
-  return [
-    { t: 'The ' + CHARS[animalId].en + ' is ', key: false },
-    { t: WORDS[wordId].en, key: true },
-    { t: ' the ' + SPOTS[spotId].en + '.', key: false }
-  ];
+/* v21：镜头永远是滑过去的（updateCamera 的缓动约 1 秒到位），不瞬移、不硬切 */
+function glideCameraTo(x, y, z) {
+  G.camMode = 'fixed';
+  G.camTarget.x = x; G.camTarget.y = y; G.camTarget.z = z;
+}
+/* v21：等孩子动手的时候，镜头要把三个人都框进来——公主、动物、目标地点
+   的中心点，而不是只盯着地点。竖屏手机横向视野只有约 27°，只盯地点会把
+   站在两边的公主 / 动物切出画面（实测：公主半个身子出框、马半个身子出框）。 */
+function frameWaiting(r) {
+  var pp = charPos('princess');
+  var ap = charPos(r.animal);
+  var sp = G.spots[r.spot];
+  var cx = (pp.x + ap.x + sp.x) / 3;
+  var cz = (pp.z + ap.z + sp.z) / 3;
+  glideCameraTo(cx, 1.5, cz);
+}
+/* 目标光圈：回合里唯一发光的东西，轻轻呼吸，告诉孩子“点这里” */
+function showTargetGlow(spotId) {
+  hideTargetGlow();
+  var sp = G.spots[spotId];
+  var ring = new THREE.Mesh(new THREE.TorusGeometry(1.6, 0.14, 10, 32),
+    new THREE.MeshBasicMaterial({ color: 0xffb703, transparent: true, opacity: 0.9 }));
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.set(sp.x, terrainH(sp.x, sp.z) + 0.15, sp.z);
+  G.scene.add(ring);
+  G.targetGlow = ring;
+  G.targetSpot = spotId;
+}
+function hideTargetGlow() {
+  if (G.targetGlow) { G.scene.remove(G.targetGlow); G.targetGlow = null; G.targetSpot = null; }
+}
+/* 读到动物名 / 地点词时，对应的 3D 东西轻轻弹一下（和声音同步） */
+function pulseObject(g, s) {
+  if (!g) return;
+  var s0 = g.scale.x;
+  G.tweens.push({ t: 0, dur: 0.45, fn: function (k) {
+    g.scale.setScalar(s0 * (1 + Math.sin(k * Math.PI) * (s || 0.12)));
+  }, done: function () { g.scale.setScalar(s0); } });
+}
+/* 藏好的小动物探头探脑：左右轻轻晃，耳朵/尾巴露在外面，孩子找得到 */
+function startPeek(id) {
+  G.peekId = id;
+  var g = G.chars[id];
+  var baseX = g.position.x;
+  (function wig() {
+    if (G.peekId !== id || !g.parent) return;
+    G.tweens.push({ t: 0, dur: 1.6, fn: function (k) {
+      g.position.x = baseX + Math.sin(k * Math.PI * 2) * 0.18;
+    }, done: function () { g.position.x = baseX; if (G.peekId === id) wig(); } });
+  })();
+}
+function stopPeek() { G.peekId = null; }
+/* 跳上 / 跳进高处（石头顶、篮子里）：先跳一下再落稳 */
+function hopUp(id, yOff) {
+  var g = G.chars[id];
+  var y0 = g.position.y;
+  var y1 = terrainH(g.position.x, g.position.z) + yOff - (g.userData.groundOff || 0);
+  g.userData.yOff = yOff;
+  G.tweens.push({ t: 0, dur: 0.45, fn: function (k) {
+    g.position.y = y0 + (y1 - y0) * k + Math.sin(k * Math.PI) * 0.5;
+  }, done: function () { g.position.y = y1; } });
+  return sleep(480);
+}
+/* 把动物放到“玩好”的位置（藏好 / 爬好 / 躲好）：walkThere=true 就走过去 */
+async function placeAnimalFinal(r, walkThere) {
+  var sp = G.spots[r.spot];
+  var off = wordOffset3D(r.word);
+  /* behind：躲到物件后面，但往旁边探出半个身子（耳朵/脑袋露在外面） */
+  if (r.word === 'behind') off = { dx: 2.4, dz: -1.0, dy: 0, cls: 'behind' };
+  if (r.word === 'under' && r.spot === 'bridge') off = { dx: 0, dz: 0, dy: 0, cls: '' };
+  var tx = clamp(sp.x + off.dx, -56, 56), tz = clamp(sp.z + off.dz, -56, 56);
+  /* v21：动物跑去藏是“一溜小跑”（速度 15），不是散步——岛很大，慢慢走要 8 秒，
+     孩子盯着空地方等不起；跑起来才是捉迷藏的样子。 */
+  if (walkThere) await moveTo(r.animal, tx, tz, 15);
+  var yOff = 0;
+  if (off.cls === 'inbox' && r.spot === 'house') yOff = 0;
+  else if (off.cls === 'inbox') {
+    yOff = -0.3;
+    var sg = G.spotMeshes[r.spot];
+    if (sg && (r.spot === 'basket' || r.spot === 'box')) { sg.userData._v21scaled = true; sg.scale.setScalar(1.35); }
+  } else if (off.cls === 'on') yOff = (G.spots[r.spot].topY - terrainH(tx, tz)) + 0.05;
+  var g = G.chars[r.animal];
+  if (walkThere && yOff !== 0) await hopUp(r.animal, yOff);
+  else setCharPos(r.animal, tx, tz, yOff);
+  g.userData.yOff = yOff;
+  g.userData.placed = off.cls;
+  g.rotation.y = 0; /* 面向镜头，脸和耳朵都看得见 */
+}
+async function hideAnimalAtSpot(r) {
+  /* 镜头跟着小动物跑（孩子看着它跑去藏，才有意思），到了再滑回藏身点 */
+  G.camMode = 'follow'; G.followId = r.animal;
+  await placeAnimalFinal(r, true);
+  var sp = G.spots[r.spot];
+  glideCameraTo(sp.x, 1.5, sp.z);
+  jumpChar(r.animal, 0.35);
+}
+/* 5 秒没动静：公主温柔提示（指一指 + 再问一遍），不判失败、不催 */
+function armIdleHint(r, myToken) {
+  disarmIdleHint();
+  G.idleHints = 0;
+  function again() {
+    if (G.phase !== 'waiting' || myToken !== G.seqToken) return;
+    G.idleHints++;
+    princessWave();
+    frameWaiting(r);
+    sayClip('where-' + r.animal, { speaker: 'princess', round: r, hint: '点一点发光的地方' }).catch(function () {});
+    G.idleTimer = setTimeout(again, 6000);
+  }
+  G.idleTimer = setTimeout(again, 5000);
+}
+function disarmIdleHint() {
+  if (G.idleTimer) { clearTimeout(G.idleTimer); G.idleTimer = null; }
+}
+function waitRoundDone(r, myToken) {
+  return new Promise(function (resolve) {
+    G.roundDoneResolve = function () {
+      if (myToken !== G.seqToken) { resolve(false); return; }
+      resolve(true);
+    };
+  });
+}
+function resolveRoundDone() {
+  if (G.roundDoneResolve) { var f = G.roundDoneResolve; G.roundDoneResolve = null; f(); }
+}
+/* 飞星星：从点的那个地方飞向顶栏（0.85 秒到，到了星星才亮） */
+function flyStar(fromX, fromY) {
+  var el = $('flystar');
+  var sr = $('stars').getBoundingClientRect();
+  var tx = sr.left + sr.width / 2, ty = sr.top + sr.height / 2;
+  el.style.display = 'block';
+  el.style.transition = 'none';
+  el.style.left = (fromX - 20) + 'px';
+  el.style.top = (fromY - 20) + 'px';
+  el.style.transform = 'translate(0,0) scale(1) rotate(0deg)';
+  el.style.opacity = '1';
+  requestAnimationFrame(function () {
+    requestAnimationFrame(function () {
+      el.style.transition = 'left .8s cubic-bezier(.3,.7,.4,1), top .8s cubic-bezier(.3,.7,.4,1), transform .8s, opacity .8s';
+      el.style.left = (tx - 20) + 'px';
+      el.style.top = (ty - 20) + 'px';
+      el.style.transform = 'scale(.55) rotate(200deg)';
+    });
+  });
+  setTimeout(function () {
+    el.style.display = 'none';
+    renderStars(); /* 星星在飞到时亮起来 */
+  }, 850);
+}
+/* 找到 / 放好了：星星跟表扬同时到，发现句是找到的欢呼 */
+async function completeRound(r, tapX, tapY) {
+  stopPeek();
+  hideTargetGlow();
+  disarmIdleHint();
+  jumpChar(r.animal, 0.9);
+  princessWave();
+  confetti(G.spots[r.spot].x, G.spots[r.spot].z);
+  flyStar(tapX, tapY);
+  G.stars++;
+  /* 表扬现在就响（不排在发现句后面）；星星在飞到时亮 */
+  playClip('praise', { text: 'Great job!', words: ['Great', 'job!'], kara: true, name: '彩虹公主',
+    onStart: function () { jumpChar('princess', 0.3); },
+    onWord: function (i) { lightWord(i); } });
+  /* place 回合：动物刚放好，轮到它说行动台词 */
+  if (r.type === 'place') {
+    await sleep(500);
+    await sayClip(actionKey(r), { speaker: r.animal, round: r });
+  }
+  /* 发现句：字逐词亮，动物名响时动物弹一下、地点词响时地点弹一下 */
+  await sayClip(discKey(r), { speaker: 'princess', round: r,
+    hint: CHARS[r.animal].zh + '在' + SPOTS[r.spot].zh + WORDS[r.word].zh,
+    onWord: function (i, w) {
+      var clean = (w || '').toLowerCase().replace(/[^a-z]/g, '');
+      if (clean === CHARS[r.animal].en) pulseObject(G.chars[r.animal], 0.15);
+      if (clean === SPOTS[r.spot].en) pulseObject(G.spotMeshes[r.spot], 0.1);
+    } });
+  await sayClip('yay', { speaker: 'princess', round: r, hint: '' });
+  resolveRoundDone();
 }
 async function startGame() {
-  if (G.selWords.length === 0) { G.selWords = ['behind']; buildSetupGrid(); }
-  G.rounds = [];
-  G.selWords.forEach(function (wid) { G.rounds = G.rounds.concat(buildRounds(wid)); });
+  G.rounds = buildRounds(G.selWord);
   G.roundIdx = 0;
   G.stars = 0;
-  G.phase = 'idle';
+  G.phase = 'story';
   G.wanderOn = true;
   startAllWander();
-  renderStars(); renderWordChip();
-  /* v19：不经过介绍卡，直接进第一题 */
-  await startRound();
+  renderStars();
+  var myToken = ++G.seqToken;
+  /* 开场：公主挥手打招呼，然后直接开始第一回合（没有选词、没有介绍卡） */
+  followPrincess();
+  var pp = charPos('princess');
+  glideCameraTo(pp.x, 1.5, pp.z);
+  princessWave();
+  await sayClip('intro', { speaker: 'princess', round: null, hint: '彩虹公主来啦！' });
+  for (G.roundIdx = 0; G.roundIdx < G.rounds.length; G.roundIdx++) {
+    if (myToken !== G.seqToken) return;
+    var done = await startRound(myToken);
+    if (!done) return; /* 被家长设置打断 */
+  }
+  if (myToken !== G.seqToken) return;
+  showFinish();
 }
-async function startRound() {
+async function startRound(myToken) {
   var r = G.rounds[G.roundIdx];
-  if (!r) { showFinish(); return; }
+  if (!r) return false;
+  r.word = G.selWord;
   G.curRound = r;
   G.wrongCount = 0;
-  var myToken = ++G.seqToken;
-  /* v19：记下每题开始时间，供测试核对“出题有多快”（游戏内计时，不受测试工具轮询影响） */
-  G.tRoundStartMs = performance.now();
-  G.tAnswerMs = null;
-  G.phase = 'dialogue';
-  renderWordChip();
+  G.phase = 'story';
   var ch = CHARS[r.animal];
   var spot = SPOTS[r.spot];
   var sp = G.spots[r.spot];
   stopWander(r.animal);
   spreadAnimalsAwayFrom(spot);
-  /* v19：不慢慢走过去、不寒暄——公主直接出现在题目旁边，镜头立刻切过去，
-     画面一开始就有人有动物，中文提示和英文任务说的是同一件事。 */
-  stopMoving('princess');
-  clearPlacement('princess');
-  setCharPos('princess', sp.x + 1.6, sp.z + 2.2, 0);
-  /* v19：公主面向镜头（南边，rotation.y = 0 时脸朝 +Z）——之前是 Math.PI，
-     孩子只能看到后脑勺和辫子，脸（眼睛/笑容都在 +Z 面）完全看不见。 */
-  G.chars.princess.rotation.y = 0;
-  jumpChar('princess', 0.3);
-  snapCameraTo(sp.x, 1.5, sp.z);
-  if (r.type === 'find') setStatus('彩虹公主去找' + ch.zh + '啦 · ' + ch.zh + '要去' + spot.zh + '那里');
-  else setStatus('把' + ch.zh + '放到' + spot.zh + WORDS[r.word].zh);
+  /* 雨只在 under 躲雨回合下 */
+  if (G.rain) G.rain.visible = (r.word === 'under');
+  /* 镜头滑到这回合的地方；公主走过去找小动物（真的走过去，腿会动，速度 14） */
+  glideCameraTo(sp.x, 1.5, sp.z);
+  var ap = charPos(r.animal);
+  await moveTo('princess', clamp(ap.x + 2.2, -56, 56), clamp(ap.z + 2.5, -56, 56), 14);
+  if (myToken !== G.seqToken) return false;
+  /* 打招呼 + 邀请玩这个游戏 */
+  await sayClip('greet-' + r.animal, { speaker: 'princess', round: r, hint: ch.zh + '来啦！' });
+  if (myToken !== G.seqToken) return false;
+  jumpChar(r.animal, 0.4);
+  await sayClip('invite-' + r.word, { speaker: 'princess', round: r });
+  if (myToken !== G.seqToken) return false;
+  /* 先读一遍这个词（词在对话栏里单独亮出来） */
+  setDialogueKaraoke('princess', '彩虹公主', [WORDS[r.word].en]);
+  setHint('今晚玩：' + WORDS[r.word].en + ' · ' + WORDS[r.word].zh);
+  await sayWord(r.word);
+  if (myToken !== G.seqToken) return false;
   if (r.type === 'find') await runFindRound(r, myToken);
   else await runPlaceRound(r, myToken);
+  if (myToken !== G.seqToken) return false;
+  /* 回合结束：动物直接回家（不慢慢走回去），下一回合 */
+  stopPeek();
+  hideTargetGlow();
+  restoreSpotScale();
+  stopMoving(r.animal);
+  clearPlacement(r.animal);
+  var h = HOME_POS[r.animal];
+  setCharPos(r.animal, px(h.x), pz(h.y), 0);
+  startWander(r.animal);
+  return true;
 }
 async function runFindRound(r, myToken) {
   var ch = CHARS[r.animal];
   var spot = SPOTS[r.spot];
   var sp = G.spots[r.spot];
-  setStatus(ch.zh + '要去' + spot.zh + '那里');
-  /* v19：小动物直接出现在题目位置（不慢慢走过去），镜头已经切好了 */
+  /* 公主也走到藏身点附近（等孩子找的时候她要在画面里，才能挥手指）——
+     和动物同时出发，不等她，边走边说，这样等孩子找的时候她已经到了。 */
+  var pc = pondClamp(clamp(sp.x - 1.5, -56, 56), clamp(sp.z + 5, -56, 56));
+  moveTo('princess', pc.x, pc.z, 15).catch(function () {});
+  /* 动物跑去藏好（真的跑过去），藏的时候永远露出来一点 */
   stopMoving(r.animal);
-  placeAnimalAtSpot(r.animal, spot, r.word);
-  jumpChar(r.animal, 0.4);
-  /* v19：缩略图不在读题时生成——生成 3D 缩略图会堵主线程，会把语音计时也拖慢。
-     卡片先出文字就能点，图在 askFindChoice 里出题后再慢慢补（见下）。 */
-  await sayLine('princess', 'Watch! Look at the ' + ch.en + '!', { tts: 'Watch! Look at the ' + ch.en + '!' });
+  clearPlacement(r.animal);
+  await hideAnimalAtSpot(r);
   if (myToken !== G.seqToken) return;
-  await sayLine('princess', 'Where is the ' + ch.en + '?', { tts: 'Where is the ' + ch.en + '?' });
+  /* 动物说自己藏好了 */
+  await sayClip(actionKey(r), { speaker: r.animal, round: r, hint: ch.zh + '藏好啦！' });
   if (myToken !== G.seqToken) return;
-  await playQuestionAudio(r);
+  /* 公主数数、问一句 */
+  await sayClip('count', { speaker: 'princess', round: r });
   if (myToken !== G.seqToken) return;
-  G.phase = 'answering';
-  G.tAnswerMs = Math.round(performance.now() - G.tRoundStartMs);
-  setStatus('点一点：小动物在哪里？');
-  var picked = await askFindChoice(r);
+  await sayClip('where-' + r.animal, { speaker: 'princess', round: r, hint: '点一点' + ch.zh + '藏的地方' });
   if (myToken !== G.seqToken) return;
-  if (picked) await celebrateAndSay(r, myToken);
+  /* 等孩子找：目标地点轻轻发光（同一时刻只有这一个东西在亮） */
+  G.phase = 'waiting';
+  frameWaiting(r);
+  showTargetGlow(r.spot);
+  startPeek(r.animal);
+  setStatus('点一点：' + ch.zh + '藏在哪里？');
+  armIdleHint(r, myToken);
+  await waitRoundDone(r, myToken);
 }
 async function runPlaceRound(r, myToken) {
   var ch = CHARS[r.animal];
   var spot = SPOTS[r.spot];
   var sp = G.spots[r.spot];
-  var w = WORDS[r.word];
-  /* v19：小动物直接出现在题目旁边，离三个圈都够远，不会挡住圈，
-     中文和英文说的是同一件事：把小动物放到那个地方。
-     v20：出发点按题目分两边——房子用西北侧 (-2.0, -1.0)，其余用东侧 (3.0, 0)；
-     之前统一放在东南侧 (+2.6, +1.2)，离公主只有 1.4，小动物整个藏在
-     公主的大裙子后面了（实测截图里小鸟只剩一只翅膀露在外面）。 */
+  /* 小动物先站在公主身边（startRound 里已经见过面了） */
   stopMoving(r.animal);
   clearPlacement(r.animal);
-  var startOff = (r.spot === 'house') ? { dx: -2.0, dz: -1.0 } : { dx: 3.0, dz: 0 };
-  var sx = clamp(sp.x + startOff.dx, -56, 56), sz = clamp(sp.z + startOff.dz, -56, 56);
-  setCharPos(r.animal, sx, sz, 0);
-  /* v19：小动物也面向镜头，孩子一开题就看到脸（之前沿用散步时的朝向，经常是背影） */
+  var pp = charPos('princess');
+  setCharPos(r.animal, clamp(pp.x + 2.2, -56, 56), clamp(pp.z + 2.0, -56, 56), 0);
   G.chars[r.animal].rotation.y = 0;
-  G.placeStart = { x: sx, z: sz };
   jumpChar(r.animal, 0.4);
-  await sayLine('princess', 'Put the ' + ch.en + ' <span class=\'key\'>' + w.en + '</span> the ' + spot.en + '!',
-    { tts: 'Put the ' + ch.en + ' ' + w.en + ' the ' + spot.en + '!' });
+  /* v21：先把小动物带到目的地附近（孩子看得见它，也看得见发光的地方）——
+     不然公主和动物都留在动物的老家，镜头在目的地这边，孩子根本看不到要拖的动物。
+     镜头跟着动物跑过去，公主也走过来（不等她，边走边说）。 */
+  var pc = pondClamp(clamp(sp.x + 1.5, -56, 56), clamp(sp.z + 5, -56, 56));
+  var pc2 = pondClamp(clamp(sp.x - 1.5, -56, 56), clamp(sp.z + 5, -56, 56));
+  /* 公主也走过来（和动物同时出发，不等她，边走边说） */
+  moveTo('princess', pc2.x, pc2.z, 15).catch(function () {});
+  G.camMode = 'follow'; G.followId = r.animal;
+  await moveTo(r.animal, pc.x, pc.z, 12);
   if (myToken !== G.seqToken) return;
-  await playQuestionAudio(r);
+  G.chars[r.animal].rotation.y = 0;
+  glideCameraTo(sp.x, 1.5, sp.z);
+  /* 公主请孩子帮忙 */
+  await sayClip('helpme', { speaker: 'princess', round: r, hint: '帮帮' + ch.zh + '吧！' });
   if (myToken !== G.seqToken) return;
-  G.phase = 'answering';
-  G.tAnswerMs = Math.round(performance.now() - G.tRoundStartMs);
-  setStatus('把' + ch.zh + '放到' + spot.zh + w.zh + ' · 拖过去或点圈圈');
-  var ok = await askPlace(r);
+  await sayClip('where-' + r.animal, { speaker: 'princess', round: r, hint: '把' + ch.zh + '送到发光的地方' });
   if (myToken !== G.seqToken) return;
-  if (ok) await celebrateAndSay(r, myToken);
+  /* 等孩子帮忙：目的地轻轻发光（同一时刻只有这一个东西在亮） */
+  G.phase = 'waiting';
+  frameWaiting(r);
+  showTargetGlow(r.spot);
+  setStatus('帮' + ch.zh + '去发光的地方吧！');
+  armIdleHint(r, myToken);
+  await waitRoundDone(r, myToken);
 }
 
-/* 找一找：三张选择卡（3D 小场景缩略图） */
-function askFindChoice(r) {
-  return new Promise(function (resolve) {
-    var layer = $('choices');
-    layer.innerHTML = '';
-    layer.classList.add('show');
-    G.choiceCards = [];
-    G.choiceResolve = resolve;
-    var others = WORD_ORDER.filter(function (id) { return id !== r.word; });
-    var opts = shuffle([r.word].concat(shuffle(others).slice(0, 2)));
-    opts.forEach(function (wid, i) {
-      var card = document.createElement('div');
-      card.className = 'choice';
-      card.dataset.wid = wid;
-      var img = document.createElement('img');
-      img.alt = '';
-      var key = r.animal + '|' + r.spot + '|' + wid;
-      if (G.thumbCache[key]) img.src = G.thumbCache[key];
-      var lab = document.createElement('div');
-      lab.className = 'clabel';
-      lab.textContent = CHARS[r.animal].zh + WORDS[wid].zh + SPOTS[r.spot].zh;
-      card.appendChild(img);
-      card.appendChild(lab);
-      card.addEventListener('click', function () { onChoiceTap(r, card); });
-      layer.appendChild(card);
-      G.choiceCards.push(card);
-      /* v19：缩略图在出题后才生成——卡片已经出来能点了，图随后一张张补上。
-         这样读题语音和出题都不被堵；真机上每张图只要几十毫秒。 */
-      if (!G.thumbCache[key]) {
-        (function (wid2, key2, img2, card2, i2) {
-          setTimeout(function () {
-            if (G.choiceCards.indexOf(card2) === -1) return; /* 已换题，不补旧图 */
-            try { G.thumbCache[key2] = makeChoiceThumb(r.animal, r.spot, wid2); } catch (e) { console.warn('[thumb] failed', e); return; }
-            if (G.choiceCards.indexOf(card2) !== -1 && !img2.getAttribute('src')) img2.src = G.thumbCache[key2];
-          }, i2 * 80);
-        })(wid, key, img, card, i);
-      }
-    });
-    hideMinimap(true);
-  });
+/* ---------------- 点按 / 拖拽的回应 v21 ----------------
+   等孩子找 / 帮的时候：点目标（或附近 110px 内）= 成功；点别处 = 温柔再试一次。
+   拖：按住动物拖，跟着手指走，松手在发光处附近 = 放好；否则滑回原位。
+   讲故事的时候点东西：只轻轻晃一下（回应一下），不打断台词。 */
+function screenDistTo(objPos3D, ev) {
+  var p = projectToClient(objPos3D.x, objPos3D.y, objPos3D.z);
+  if (p.behind) return 1e9;
+  return Math.hypot(ev.clientX - p.x, ev.clientY - p.y);
 }
-function onChoiceTap(r, card) {
-  if (G.phase !== 'answering') return;
-  if (card.dataset.wid === r.word) {
-    card.classList.add('good');
-    hideChoices();
-    if (G.choiceResolve) { var res = G.choiceResolve; G.choiceResolve = null; res(true); }
-  } else {
-    card.classList.add('bad');
-    wrongPick(r);
-    setTimeout(function () { card.classList.remove('bad'); }, 900);
+/* 目标在屏幕上的位置（地点上空 1.2 米处） */
+function targetScreenPoint(r) {
+  var sp = G.spots[r.spot];
+  return { x: sp.x, y: terrainH(sp.x, sp.z) + 1.2, z: sp.z };
+}
+function wiggleChar(id) {
+  var g = G.chars[id];
+  if (!g) return;
+  var base = g.position.x;
+  G.tweens.push({ t: 0, dur: 0.4, fn: function (k) {
+    g.position.x = base + Math.sin(k * Math.PI * 2) * 0.12;
+  }, done: function () { g.position.x = base; } });
+}
+/* 点到 / 拖到了目标：ding 立刻响；place 回合动物先走过去，到了再庆祝 */
+async function onFoundTap(r, ev) {
+  if (G.phase !== 'waiting') return;
+  G.phase = 'celebrating';
+  ding();
+  stopAudioNow();
+  if (r.type === 'place') {
+    await placeAnimalFinal(r, true);
+    jumpChar(r.animal, 0.4);
   }
+  await completeRound(r, ev.clientX, ev.clientY);
 }
-function hideChoices() {
-  var layer = $('choices');
-  layer.classList.remove('show');
-  layer.innerHTML = '';
-  G.choiceCards = [];
-  hideMinimap(false);
-}
-function pulseCorrectChoice(wordId) {
-  (G.choiceCards || []).forEach(function (card) {
-    if (card.dataset.wid === wordId) card.classList.add('pulse');
-  });
-}
-
-/* 放一放：三个发光圈，点圈或拖动物 */
-function askPlace(r) {
-  return new Promise(function (resolve) {
-    var spot = SPOTS[r.spot];
-    var sp = G.spots[r.spot];
-    var others = WORD_ORDER.filter(function (id) { return id !== r.word; });
-    var opts = shuffle([r.word].concat(shuffle(others).slice(0, 2)));
-    clearCircles();
-    opts.forEach(function (wid) {
-      var off = circleOffset3D(wid, r.spot);
-      var cx = clamp(sp.x + off.dx, -54, 54), cz = clamp(sp.z + off.dz, -54, 54);
-      var baseY = terrainH(cx, cz) + 0.06;
-      /* v20：圈改成立在地面上的发光圆环 + 一道金色光柱——低镜头下平铺在地上的
-         圈会被压成一条细缝、还会被房子/公主挡住；立起来的环从哪个角度都看得见，
-         像真的游戏里的传送门。on 的环浮在物件顶上（屋顶/桥面/盒子顶）。 */
-      var hoopY = (wid === 'on') ? (sp.topY + 0.6) : (baseY + 1.1);
-      var ring = new THREE.Mesh(new THREE.RingGeometry(0.62, 0.9, 32),
-        new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.95, side: THREE.DoubleSide, depthWrite: false }));
-      ring.position.set(cx, hoopY, cz);
-      ring.userData.ringId = wid;
-      var beamH = (hoopY + 1.2) - baseY;
-      var beam = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.55, beamH, 12, 1, true),
-        new THREE.MeshBasicMaterial({ color: 0xffe066, transparent: true, opacity: 0.2, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending }));
-      beam.position.set(cx, baseY + beamH / 2, cz);
-      beam.userData.ringId = wid;
-      var hit = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.4, 1.6, 12),
-        new THREE.MeshBasicMaterial({ visible: false }));
-      hit.position.set(cx, baseY + 0.6, cz);
-      hit.userData.ringId = wid;
-      var dot = sph(0.32, 0xffb703, cx, hoopY, cz);
-      dot.userData.ringId = wid;
-      G.scene.add(ring); G.scene.add(beam); G.scene.add(hit); G.scene.add(dot);
-      G.circles.push({ wid: wid, x: cx, y: hoopY - 0.4, z: cz, hoopY: hoopY, baseY: baseY,
-        ring: ring, beam: beam, hit: hit, dot: dot, spotX: sp.x, spotZ: sp.z, phase: Math.random() * 6, hintPulse: false });
-    });
-    G.placeResolve = resolve;
-    G.placeRound = r;
-  });
-}
-function clearCircles() {
-  G.circles.forEach(function (c) { G.scene.remove(c.ring); G.scene.remove(c.beam); G.scene.remove(c.hit); if (c.dot) G.scene.remove(c.dot); });
-  G.circles = [];
-  G.placeResolve = null; G.placeRound = null;
-  G.dragState = null;
-}
-/* v19：先判对错，再动动物。点错了动物原地不动、永远不会消失；
-   点对了才把动物走过去放到正确位置。 */
-async function onCircleTap(r, circle) {
-  if (G.phase !== 'answering' || !circle) return;
-  if (circle.wid === r.word) {
-    stopMoving(r.animal);
-    await moveTo(r.animal, circle.spotX, circle.spotZ, 9);
-    placeAnimalAtSpot(r.animal, SPOTS[r.spot], r.word);
-    var res = G.placeResolve;
-    clearCircles();
-    if (res) res(true);
-  } else {
-    wrongPick(r);
-  }
-}
-/* 答错后把动物送回本回合的出发点（看得见的地方），回合永远不会卡死 */
-function returnAnimalToStart(r) {
-  if (!G.placeStart || r.type !== 'place') return;
-  var g = G.chars[r.animal];
-  stopMoving(r.animal);
-  clearPlacement(r.animal);
-  setCharPos(r.animal, G.placeStart.x, G.placeStart.z, 0);
-}
+/* 点错了：动物轻轻摇摇头，公主温柔说“再试一次”，动物永远在原地，不会消失 */
 async function wrongPick(r) {
-  G.wrongCount++;
-  var g = G.chars[r.animal];
-  returnAnimalToStart(r);
-  var baseX = g.position.x;
-  G.tweens.push({ t: 0, dur: 0.5, fn: function (k) {
-    g.position.x = baseX + Math.sin(k * Math.PI * 4) * 0.15 * (1 - k);
-  }, done: function () { g.position.x = baseX; } });
-  setDialogue('princess', '彩虹公主', [{ t: '不是这里哦，再试一次！', key: false }]);
-  setStatus('不是这里哦，再试一次');
-  await speakTTS('Try again! Where is the ' + CHARS[r.animal].en + '?', 0.7);
+  if (G._tryagainBusy) return;
+  G._tryagainBusy = true;
+  try {
+    G.wrongCount++;
+    var g = G.chars[r.animal];
+    var baseX = g.position.x;
+    G.tweens.push({ t: 0, dur: 0.5, fn: function (k) {
+      g.position.x = baseX + Math.sin(k * Math.PI * 4) * 0.15 * (1 - k);
+    }, done: function () { g.position.x = baseX; } });
+    setDialogue('princess', '彩虹公主', [{ t: '不是这里哦，再试一次！', key: false }]);
+    setStatus('不是这里哦，再试一次！');
+    await playClip('tryagain', { text: 'Try again!', words: ['Try', 'again!'], kara: true, name: '彩虹公主',
+      onWord: function (i) { lightWord(i); } });
+  } finally {
+    G._tryagainBusy = false;
+  }
 }
-/* v19：”?” 给真提示——金色光圈圈住正确答案 + 正确卡片闪烁 +
-   公主用中文说出答案 + 重新慢读单词和整句。光圈围着动物本身（找一找）
-   或正确的圈（放一放），镜头立刻切过去。 */
+/* v21：“?” 给真提示——金色光圈圈住目标 + 镜头滑过去 + 公主指过去 + 再问一遍 */
 async function doHint() {
-  if (!G.curRound || G.phase !== 'answering') return;
+  if (!G.curRound || G.phase !== 'waiting') return;
   var r = G.curRound;
   var spot = SPOTS[r.spot];
   var sp = G.spots[r.spot];
-  var cx, cz;
-  if (r.type === 'place') {
-    var right = null;
-    G.circles.forEach(function (c) { if (c.wid === r.word) right = c; });
-    if (right) { cx = right.x; cz = right.z; right.hintPulse = true; }
-    else { cx = sp.x; cz = sp.z; }
-  } else {
-    var ap = charPos(r.animal);
-    cx = ap.x; cz = ap.z;
-    pulseCorrectChoice(r.word);
-  }
   if (G.hintRing) { G.scene.remove(G.hintRing); G.hintRing = null; }
-  var ring = new THREE.Mesh(new THREE.TorusGeometry(1.8, 0.18, 10, 32), mat(0xffb703));
-  ring.rotation.x = 0; /* v20：提示圈也立起来（平铺的圈低镜头下看不见） */
-  ring.position.set(cx, terrainH(cx, cz) + 1.0, cz);
+  var ring = new THREE.Mesh(new THREE.TorusGeometry(1.8, 0.18, 10, 32), mat(0xffb703, { transparent: true }));
+  ring.rotation.x = 0; /* 提示圈立起来（平铺的圈低镜头下看不见） */
+  ring.position.set(sp.x, terrainH(sp.x, sp.z) + 1.0, sp.z);
   G.scene.add(ring);
   G.hintRing = ring;
   G.tweens.push({ t: 0, dur: 2.2, fn: function (k) {
@@ -1682,52 +2026,11 @@ async function doHint() {
     ring.scale.set(s, s, s);
     ring.material.opacity = 1 - k * 0.5;
   }, done: function () { G.scene.remove(ring); if (G.hintRing === ring) G.hintRing = null; } });
-  snapCameraTo(cx, 1.5, cz);
+  frameWaiting(r);
   princessWave();
-  var segs = sentenceSegments(r.word, r.animal, r.spot);
-  setDialogue('princess', '彩虹公主', [{ t: '看这里！', key: false }].concat(segs));
+  setDialogue('princess', '彩虹公主', [{ t: '看这里！', key: false }]);
   setStatus('提示：' + CHARS[r.animal].zh + '在' + spot.zh + WORDS[r.word].zh);
-  await playQuestionAudio(r);
-}
-async function celebrateAndSay(r, myToken) {
-  G.phase = 'celebrating';
-  hideChoices();
-  var ch = CHARS[r.animal];
-  var spot = SPOTS[r.spot];
-  var sp = G.spots[r.spot];
-  jumpChar(r.animal, 0.9);
-  princessWave();
-  confetti(sp.x, sp.z);
-  await playClip('praise');
-  if (myToken !== G.seqToken) return;
-  var segs = sentenceSegments(r.word, r.animal, r.spot);
-  var html = segs.map(function (s) { return s.key ? "<span class='key'>" + s.t + '</span>' : s.t; }).join('');
-  var isHorse = r.animal === 'horse';
-  await sayLine('princess', html, isHorse
-    ? { clip: sentenceKey(r.word, r.spot) }
-    : { tts: sentenceText(r.word, r.animal, r.spot) });
-  if (myToken !== G.seqToken) return;
-  G.stars++;
-  renderStars();
-  setStatus('说得真棒！★');
-  /* v19：明确告诉孩子下一题要来了，再进下一题；动物直接回家，不慢慢走回去 */
-  G.phase = 'transition';
-  showToast('下一题 ▶', 1200);
-  await sleep(1100);
-  G.phase = 'idle';
-  G.roundIdx++;
-  if (myToken !== G.seqToken) return;
-  if (G.roundIdx < G.rounds.length) {
-    renderWordChip();
-    stopMoving(r.animal);
-    clearPlacement(r.animal);
-    var h = HOME_POS[r.animal];
-    setCharPos(r.animal, px(h.x), pz(h.y), 0);
-    startWander(r.animal);
-    startRound();
-  } else {
-    showFinish();
-  }
+  await sayClip('where-' + r.animal, { speaker: 'princess', round: r, hint: CHARS[r.animal].zh + '在' + spot.zh + WORDS[r.word].zh });
 }
 function confetti(x, z) {
   var y = terrainH(x, z) + 3;
@@ -1744,22 +2047,22 @@ function showFinish() {
   G.phase = 'idle';
   G.seqToken++;
   stopAllWander();
-  playClip('finish');
+  if (G.rain) G.rain.visible = false;
+  sayClip('finish', { speaker: 'princess', round: null, hint: '今天玩得真棒！' });
   var total = G.rounds.length;
   $('finish-stars').textContent = '★'.repeat(Math.max(1, G.stars)) + '☆'.repeat(Math.max(0, total - G.stars));
-  var words = G.selWords.map(function (id) { return WORDS[id].en; }).join('、');
-  $('finish-summary').textContent = '今天练了：' + words + ' · 得了 ' + G.stars + ' 颗星';
-  $('finish-mission').textContent = '★ 回家小任务：' + (MISSIONS[G.selWords[0]] || '');
+  $('finish-summary').textContent = '今天玩了：' + WORDS[G.selWord].en + ' · ' + WORDS[G.selWord].zh + ' · 得了 ' + G.stars + ' 颗星';
+  $('finish-mission').textContent = '★ 回家小任务：' + (MISSIONS[G.selWord] || '');
   showOverlay('finish');
 }
 function getState() {
   return {
     phase: G.phase, roundIdx: G.roundIdx, roundsTotal: G.rounds.length,
-    stars: G.stars, selWords: G.selWords.slice(),
+    stars: G.stars, selWord: G.selWord, wrongCount: G.wrongCount, idleHints: G.idleHints,
     curRound: G.curRound ? { word: G.curRound.word, animal: G.curRound.animal,
       spot: G.curRound.spot, type: G.curRound.type } : null,
     lastSpoken: G.lastSpoken.slice(-6),
-    tAnswerMs: G.tAnswerMs,
+    audioLog: G.audioLog.slice(-12),
     chars: Object.keys(G.chars).map(function (id) {
       var g = G.chars[id];
       return { id: id, x: +g.position.x.toFixed(2), z: +g.position.z.toFixed(2),
@@ -1768,81 +2071,7 @@ function getState() {
   };
 }
 
-/* ---------------- 找一找缩略图：独立小场景渲染 ---------------- */
-/* v19：选择卡缩略图放大——动物占画面主体，镜头拉近，三张卡一眼能分清 */
-function makeChoiceThumb(animalId, spotId, wordId) {
-  try {
-    if (!G.thumbRenderer) {
-      G.thumbRenderer = new THREE.WebGLRenderer({ preserveDrawingBuffer: true, antialias: true });
-      G.thumbRenderer.setSize(260, 180);
-      G.thumbRenderer.outputColorSpace = THREE.SRGBColorSpace;
-      /* v20：缩略图也用 ACES，和主场景一个色调 */
-      G.thumbRenderer.toneMapping = THREE.ACESFilmicToneMapping;
-      G.thumbRenderer.toneMappingExposure = 1.15;
-    }
-    var scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x7ec8f7);
-    scene.add(new THREE.HemisphereLight(0xffffff, 0x8a7a5a, 1.3));
-    var sun = new THREE.DirectionalLight(0xfff2cc, 2.0);
-    sun.position.set(3, 8, 4);
-    scene.add(sun);
-    var ground = new THREE.Mesh(new THREE.CircleGeometry(3.4, 24), mat(0x69c25e));
-    ground.rotation.x = -Math.PI / 2;
-    scene.add(ground);
-    var spot = SPOT_BUILDERS[spotId]();
-    spot.scale.setScalar(0.5);
-    scene.add(spot);
-    var off = miniOffset3D(wordId);
-    var an = CHAR_BUILDERS[animalId]();
-    an.scale.setScalar(1.05);
-    an.position.set(off.dx * 0.5, 0, off.dz * 0.5);
-    if (off.cls === 'inbox') an.position.y = -0.2;
-    if (off.cls === 'on') an.position.y = (G.spots[spotId] ? G.spots[spotId].topY - terrainH(G.spots[spotId].x, G.spots[spotId].z) : 1) * 0.5;
-    scene.add(an);
-    var cam = new THREE.PerspectiveCamera(45, 260 / 180, 0.1, 50);
-    cam.position.set(0, 4.2, 5.4);
-    cam.lookAt(0, 0.5, 0);
-    G.thumbRenderer.render(scene, cam);
-    return G.thumbRenderer.domElement.toDataURL('image/png');
-  } catch (e) {
-    console.warn('[thumb] failed', e);
-    return '';
-  }
-}
-
-/* ---------------- 小地图 ---------------- */
-/* v19：小地图看不懂，已从界面去掉；这两个函数留着当空操作，免得别处调用报错 */
-function hideMinimap(hide) { var el = $('minimap'); if (el) el.style.display = hide ? 'none' : 'block'; }
-function drawMinimap() {
-  var cv = $('minimap');
-  if (!cv || cv.style.display === 'none') return;
-  var ctx = cv.getContext('2d');
-  ctx.clearRect(0, 0, 92, 62);
-  function mx(x) { return (x + 58) / 116 * 92; }
-  function mz(z) { return (z + 58) / 116 * 62; }
-  var zones = [
-    { x0: -58, z0: -58, x1: 58, z1: -43, c: '#9ca3af' },
-    { x0: -58, z0: -43, x1: 58, z1: -18, c: '#22c55e' },
-    { x0: -58, z0: -18, x1: -20, z1: 12, c: '#f59e0b' },
-    { x0: -12, z0: -10, x1: 12, z1: 10, c: '#38bdf8' },
-    { x0: 18, z0: -18, x1: 58, z1: 12, c: '#f472b6' },
-    { x0: -58, z0: 28, x1: 58, z1: 50, c: '#fde68a' },
-    { x0: -58, z0: 50, x1: 58, z1: 58, c: '#3b82f6' }
-  ];
-  zones.forEach(function (zn) {
-    ctx.fillStyle = zn.c;
-    ctx.fillRect(mx(zn.x0), mz(zn.z0), mx(zn.x1) - mx(zn.x0), mz(zn.z1) - mz(zn.z0));
-  });
-  var dotColors = { horse: '#a16207', cat: '#f97316', dog: '#92400e', bear: '#78350f', bird: '#0ea5e9' };
-  CHAR_IDS.forEach(function (id) {
-    var p = charPos(id);
-    ctx.fillStyle = dotColors[id];
-    ctx.beginPath(); ctx.arc(mx(p.x), mz(p.z), 3.5, 0, Math.PI * 2); ctx.fill();
-  });
-  var pp = charPos('princess');
-  ctx.fillStyle = '#ec4899';
-  ctx.beginPath(); ctx.arc(mx(pp.x), mz(pp.z), 4.5, 0, Math.PI * 2); ctx.fill();
-}
+/* v21：选择卡和缩略图都取消了（不再做题），小地图也早已去掉。 */
 
 /* ---------------- DOM 界面 ---------------- */
 function renderStars() {
@@ -1851,24 +2080,9 @@ function renderStars() {
   for (var i = 0; i < total; i++) html += '<span class="' + (i < G.stars ? 'on' : '') + '">★</span>';
   $('stars').innerHTML = html;
 }
-function renderWordChip() {
-  var inGame = G.phase !== 'idle' && !!G.curRound;
-  var wid = (inGame ? G.curRound.word : (G.selWords && G.selWords[0])) || 'behind';
-  var w = WORDS[wid];
-  var chip = $('wordchip');
-  chip.textContent = w.en + ' · ' + w.zh;
-  chip.style.color = w.color;
-  var iw = $('intro-word');
-  if (iw) { iw.textContent = w.en + ' · ' + w.zh; iw.style.color = w.color; }
-  var ist = $('intro-stars');
-  if (ist) {
-    var stars = inGame ? G.stars : 0;
-    var total = G.rounds.length || 4;
-    ist.textContent = '★'.repeat(Math.max(0, stars)) + '☆'.repeat(Math.max(0, total - stars));
-  }
-}
+function renderWordChip() { /* v21：顶栏词条已取消（孩子看不到词，词只在家长设置里） */ }
 function showOverlay(name) {
-  /* v19：介绍卡已去掉，只剩开声音 / 家长设置 / 完成页三个遮罩 */
+  /* v21：只剩开声音 / 家长设置 / 完成页三个遮罩 */
   ['ov-unlock', 'ov-setup', 'ov-finish'].forEach(function (id) {
     var el = $(id);
     if (el) el.classList.toggle('show', id === 'ov-' + name);
@@ -1880,29 +2094,28 @@ function buildSetupGrid() {
   WORD_ORDER.forEach(function (wid) {
     var w = WORDS[wid];
     var cell = document.createElement('div');
-    cell.className = 'wordcell' + (G.selWords.indexOf(wid) >= 0 ? ' sel' : '');
+    cell.className = 'wordcell' + (G.selWord === wid ? ' sel' : '');
     var en = document.createElement('div');
     en.className = 'en'; en.textContent = w.en; en.style.background = w.color;
     var zh = document.createElement('div');
     zh.className = 'zh'; zh.textContent = w.zh;
     cell.appendChild(en); cell.appendChild(zh);
     cell.addEventListener('click', function () {
-      var idx = G.selWords.indexOf(wid);
-      if (idx >= 0) G.selWords.splice(idx, 1);
-      else G.selWords.push(wid);
-      // 允许全不选；点开始时没选就默认只练 behind（见 startGame）。
+      /* v21：今晚只练一个词，点哪个就练哪个 */
+      G.selWord = wid;
       buildSetupGrid();
-      renderWordChip();
     });
     grid.appendChild(cell);
   });
 }
 function backToSetup() {
   G.seqToken++;
+  stopAudioNow();
+  hideTargetGlow();
+  disarmIdleHint();
+  if (G.rain) G.rain.visible = false;
   stopAllWander();
   G.phase = 'idle';
-  hideChoices();
-  clearCircles();
   buildSetupGrid();
   showOverlay('setup');
 }
@@ -1942,15 +2155,18 @@ function cycleMode() {
 }
 function buildUI() {
   buildSetupGrid();
-  renderStars(); renderWordChip();
+  renderStars();
   $('unlock-btn').addEventListener('click', function () {
     G.audioUnlocked = true;
-    /* v19：点一下立刻听得见、看得见——马上播一声表扬音效，按钮变成“声音开啦”，
-       家长设置页里也出现绿色提示。以前只播 0.15 秒静音，看着就像没打开。 */
+    /* v21：点一下立刻听得见、看得见——马上播一声表扬音效（预录音），按钮变成“声音开啦”，
+       家长设置页里也出现绿色提示；同时把今晚要用的录音都预热解码好。 */
     var btn = $('unlock-btn');
     btn.textContent = '声音开啦 🔊';
     btn.disabled = true;
-    playClip('praise');
+    ensureAudioCtx();
+    playClip('praise', { text: 'Great job!', words: ['Great', 'job!'], kara: true, name: '彩虹公主',
+      onWord: function (i) { lightWord(i); } });
+    preloadClips(G.selWord);
     showToast('声音开啦 🔊', 1800);
     var note = $('sound-note');
     if (note) note.style.display = 'block';
@@ -1958,14 +2174,21 @@ function buildUI() {
     buildSetupGrid();
     showOverlay('setup');
   });
-  /* v19：点“开始玩”直接进第一题，不经过介绍卡 */
+  /* v21：点“今晚就练这个词”直接进游戏——打开就是小岛，没有选词屏、没有介绍卡 */
   $('start-btn').addEventListener('click', function () {
     showOverlay(null);
     startGame();
   });
+  $('setup-close-btn').addEventListener('click', function () {
+    showOverlay(null);
+    if (G.audioUnlocked) startGame();
+  });
   $('again-btn').addEventListener('click', function () {
     showOverlay(null);
     G.seqToken++;
+    stopAudioNow();
+    hideTargetGlow();
+    disarmIdleHint();
     CHAR_IDS.forEach(function (id) {
       clearPlacement(id);
       var h = HOME_POS[id];
@@ -1975,26 +2198,35 @@ function buildUI() {
     setCamFocus(px(50), 1.5, pz(66));
     startGame();
   });
-  $('change-btn').addEventListener('click', function () {
+  $('parent2-btn').addEventListener('click', function () {
     G.seqToken++;
+    stopAudioNow();
+    hideTargetGlow();
+    disarmIdleHint();
     buildSetupGrid();
     showOverlay('setup');
   });
+  /* ♪：再听一遍当前这句（排队，不叠加） */
   $('speak-btn').addEventListener('click', function () {
-    if (G.curRound && !G.dialogueBusy) playQuestionAudio(G.curRound);
+    if (!G.lastClipKey || !G.lastClipText) return;
+    var words = G.lastClipText.split(/\s+/).filter(Boolean);
+    setDialogueKaraoke('princess', G.lastClipName || '彩虹公主', words);
+    playClip(G.lastClipKey, { text: G.lastClipText, words: words, kara: true,
+      onWord: function (i) { lightWord(i); } });
   });
   $('hint-btn').addEventListener('click', function () { doHint(); });
   $('mode-btn').addEventListener('click', cycleMode);
-  var backTimer = null;
-  var backBtn = $('back-btn');
-  backBtn.addEventListener('pointerdown', function () {
-    backBtn.style.background = '#ffe1a8';
-    backTimer = setTimeout(function () { backBtn.style.background = '#fff'; backToSetup(); }, 3000);
+  /* v21：家长设置是“按住角落的 ⚙ 3 秒”——孩子误点一下打不开 */
+  var parentTimer = null;
+  var parentBtn = $('parent-btn');
+  parentBtn.addEventListener('pointerdown', function () {
+    parentBtn.style.background = '#ffe1a8';
+    parentTimer = setTimeout(function () { parentBtn.style.background = '#fff'; backToSetup(); }, 3000);
   });
   ['pointerup', 'pointerleave', 'pointercancel'].forEach(function (ev) {
-    backBtn.addEventListener(ev, function () {
-      backBtn.style.background = '#fff';
-      if (backTimer) { clearTimeout(backTimer); backTimer = null; }
+    parentBtn.addEventListener(ev, function () {
+      parentBtn.style.background = '#fff';
+      if (parentTimer) { clearTimeout(parentTimer); parentTimer = null; }
     });
   });
   bindWorldInput();
@@ -2037,89 +2269,58 @@ function groundPoint(ev) {
   return hits.length ? hits[0].point : null;
 }
 async function onAnimalTap(id) {
-  if (G.phase !== 'idle') return;
+  if (G.phase !== 'idle') { wiggleChar(id); return; }
   stopWander(id);
   stopMoving(id);
-  var ch = CHARS[id];
-  await sayLine(id, 'Hello!', { tts: CHAR_GREETING[id] });
+  await sayClip('greet-' + id, { speaker: id, round: null, hint: CHARS[id].zh + '来啦！' });
   princessWave();
-  await sayLine('princess', 'Hi, little ' + ch.en + "! Let's play!", { tts: 'Hi, little ' + ch.en + "! Let's play!" });
   startWander(id);
 }
 function onSpotTap(spotId) {
   var sp = SPOTS[spotId];
-  var g = G.spotMeshes[spotId];
-  if (g) {
-    var s0 = g.scale.x;
-    G.tweens.push({ t: 0, dur: 0.4, fn: function (k) { g.scale.setScalar(s0 * (1 + Math.sin(k * Math.PI) * 0.12)); },
-      done: function () { g.scale.setScalar(s0); } });
-  }
+  pulseObject(G.spotMeshes[spotId], 0.12);
   if (G.phase === 'idle') {
     setDialogue('princess', '彩虹公主', [{ t: '这是' + sp.zh + '！', key: false }]);
     setStatus('这是' + sp.zh);
   }
 }
-/* v19：放一放回合的点选改用屏幕坐标——算每个圈和动物在屏幕上的位置，
-   点到谁最近就选谁。3D 射线会被房子/大树挡住（v18 点圈圈失灵的根因），
-   屏幕坐标不会：圈在画面上看得见，就一定点得到。 */
-function pickPlaceTarget(ev) {
-  var best = null, bestD = 1e9;
-  G.circles.forEach(function (c) {
-    var p = projectToClient(c.x, c.y + 0.4, c.z);
-    if (p.behind) return;
-    var d = Math.hypot(ev.clientX - p.x, ev.clientY - p.y);
-    if (d < bestD) { bestD = d; best = { kind: 'ring', circle: c, d: d }; }
-  });
-  var ap = charPos(G.curRound.animal);
-  var ag = G.chars[G.curRound.animal];
-  var pa = projectToClient(ap.x, ag.position.y + 1.4, ap.z);
-  if (!pa.behind) {
-    var da = Math.hypot(ev.clientX - pa.x, ev.clientY - pa.y);
-    if (da < bestD) { bestD = da; best = { kind: 'animal', d: da }; }
-  }
-  if (!best) return null;
-  if (best.kind === 'ring' && best.d <= 75) return best;
-  if (best.kind === 'animal' && best.d <= 85) return best;
-  return null;
-}
+/* v21：点按改用屏幕坐标判（3D 射线会被房子/大树挡住，屏幕坐标不会：
+   目标在画面上看得见，就一定点得到；110px 内都算中，胖手指友好） */
 function bindWorldInput() {
   var cv = G.renderer.domElement;
   cv.addEventListener('pointerdown', function (ev) {
     if (document.querySelector('.overlay.show')) return;
-    /* 放一放答题中：先用屏幕坐标点选（圈 > 动物，离点按处最近的赢） */
-    if (G.phase === 'answering' && G.curRound && G.curRound.type === 'place') {
-      var pick = pickPlaceTarget(ev);
-      if (!pick) return;
-      if (pick.kind === 'ring') { onCircleTap(G.curRound, pick.circle); return; }
-      G.dragState = { animal: G.curRound.animal, moved: false };
-      stopMoving(G.curRound.animal);
+    /* 等孩子找 / 帮的时候：先算离目标和离动物多近 */
+    if (G.phase === 'waiting' && G.curRound) {
+      var r = G.curRound;
+      var dTarget = screenDistTo(targetScreenPoint(r), ev);
+      var ap = charPos(r.animal);
+      var ag = G.chars[r.animal];
+      var dAnimal = screenDistTo({ x: ap.x, y: ag.position.y + 1.4, z: ap.z }, ev);
+      if (r.type === 'find') {
+        if (dTarget <= 110 || dAnimal <= 110) { onFoundTap(r, ev); return; }
+        wrongPick(r);
+        return;
+      }
+      /* place 回合：离手指更近的那个说了算——按住动物 = 拖，点发光处 = 动物自己走过去。
+         动物就站在发光处旁边（5 米），两个都在 110px 内时必须分清，不然拖永远拖不起来。 */
+      if (dAnimal <= 110 && dAnimal <= dTarget) {
+        G.dragState = { animal: r.animal, moved: false, startX: ap.x, startZ: ap.z };
+        stopMoving(r.animal);
+        return;
+      }
+      if (dTarget <= 110) { onFoundTap(r, ev); return; }
+      wrongPick(r);
       return;
     }
+    /* 不是等孩子的时候：点动物就打招呼（预录音），点东西就晃一下 */
     var hit = pickAt(ev);
     if (!hit) return;
-    if (hit.kind === 'ring') {
-      if (G.phase === 'answering' && G.curRound && G.curRound.type === 'place') {
-        var circle = null;
-        G.circles.forEach(function (c) { if (c.wid === hit.wid) circle = c; });
-        if (circle) onCircleTap(G.curRound, circle);
-      }
-      return;
-    }
-    if (hit.kind === 'char') {
-      if (G.phase === 'answering' && G.curRound && G.curRound.type === 'place' && hit.id === G.curRound.animal) {
-        G.dragState = { animal: hit.id, moved: false };
-        stopMoving(hit.id);
-      } else {
-        onAnimalTap(hit.id);
-      }
-      return;
-    }
+    if (hit.kind === 'char') { onAnimalTap(hit.id); return; }
     if (hit.kind === 'spot') { onSpotTap(hit.id); return; }
-    if (hit.kind === 'ground') {
-      if (G.phase === 'idle') {
-        var p = hit.point;
-        walkPrincessTo(clamp(p.x, -56, 56), clamp(p.z, -56, 56), 8);
-      }
+    if (hit.kind === 'ground' && G.phase === 'idle') {
+      var p = hit.point;
+      walkPrincessTo(clamp(p.x, -56, 56), clamp(p.z, -56, 56), 8);
     }
   });
   cv.addEventListener('pointermove', function (ev) {
@@ -2130,23 +2331,31 @@ function bindWorldInput() {
     setCharPos(id, clamp(pt.x, -56, 56), clamp(pt.z, -56, 56), G.chars[id].userData.yOff || 0);
     G.dragState.moved = true;
   });
-  cv.addEventListener('pointerup', function (ev) {
+  cv.addEventListener('pointerup', async function (ev) {
     if (!G.dragState) return;
     var st = G.dragState;
     G.dragState = null;
-    if (!st.moved || G.phase !== 'answering' || !G.curRound) return;
-    /* v20：按松手时手指在屏幕上离哪个圈最近来判（不是按地面落点）——
-       圈现在是立起来的光环，手指落在环上时，射线打到地面的点会在环后方好几米，
-       按地面点判永远判不对。屏幕距离和点按选圈是同一套逻辑（75px 内算中）。 */
-    var best = null, bestD = 1e9;
-    G.circles.forEach(function (c) {
-      var p = projectToClient(c.x, c.y + 0.4, c.z);
-      if (p.behind) return;
-      var d = Math.hypot(ev.clientX - p.x, ev.clientY - p.y);
-      if (d < bestD) { bestD = d; best = c; }
-    });
-    if (best && bestD < 75) onCircleTap(G.curRound, best);
-    else { returnAnimalToStart(G.curRound); wrongPick(G.curRound); }
+    if (G.phase !== 'waiting' || !G.curRound) return;
+    var r = G.curRound;
+    if (!st.moved) {
+      /* 只点了一下动物，没拖：当作“送它过去”（点动物就是想让它动） */
+      onFoundTap(r, ev);
+      return;
+    }
+    var d = screenDistTo(targetScreenPoint(r), ev);
+    if (d <= 110) {
+      /* 拖到了：先把动物放到正确位置，再庆祝 */
+      ding();
+      G.phase = 'celebrating';
+      stopAudioNow();
+      await placeAnimalFinal(r, false);
+      jumpChar(r.animal, 0.4);
+      await completeRound(r, ev.clientX, ev.clientY);
+    } else {
+      /* 没拖到：滑回出发点，温柔再试一次 */
+      await moveTo(r.animal, st.startX, st.startZ, 10);
+      wrongPick(r);
+    }
   });
 }
 
@@ -2181,19 +2390,55 @@ function tick() {
       G.confettiBits.splice(j, 1);
     }
   }
-  /* 圈圈脉动；提示的那个圈跳得更明显；光柱跟着呼吸 */
-  G.circles.forEach(function (c) {
-    var s = 1 + Math.sin(now * 0.006 + c.phase) * 0.12;
-    if (c.hintPulse) s = 1.35 + Math.sin(now * 0.01 + c.phase) * 0.25;
-    c.ring.scale.set(s, s, 1);
-    if (c.dot) {
-      var hy = (c.hoopY !== undefined ? c.hoopY : c.y + 1.5);
-      c.dot.position.y = hy + Math.sin(now * 0.004 + c.phase) * 0.25;
-      var ds = c.hintPulse ? 1.5 : 1;
-      c.dot.scale.set(ds, ds, ds);
+  /* v21：目标光圈呼吸（同一时刻只有它在亮） */
+  if (G.targetGlow) {
+    var gs = 1 + Math.sin(now * 0.004) * 0.1;
+    G.targetGlow.scale.set(gs, gs, 1);
+    G.targetGlow.material.opacity = 0.65 + Math.sin(now * 0.004) * 0.25;
+  }
+  /* v21：地点小牌子离镜头太近会糊满屏——靠近时淡出（牌子是 3D 精灵，固定 3.4 米宽；
+     横屏镜头停在房子南边时，正好贴着桌子 / 盒子的牌子，实测糊了半屏） */
+  if (G.labels) {
+    for (var li = 0; li < G.labels.length; li++) {
+      var lb = G.labels[li];
+      var ld = lb.position.distanceTo(G.camera.position);
+      lb.material.opacity = Math.max(0, Math.min(1, (ld - 5) / 6));
     }
-    if (c.beam) c.beam.material.opacity = 0.16 + Math.sin(now * 0.002 + c.phase) * 0.07;
+  }
+  /* v21：下雨（只在 under 躲雨回合里） */
+  if (G.rain && G.rain.visible) {
+    var rp = G.rain.geometry.attributes.position;
+    for (var ri2 = 0; ri2 < rp.count; ri2++) {
+      var ry = rp.array[ri2 * 3 + 1] - dt * 16;
+      if (ry < 0) ry = 20 + Math.random() * 2;
+      rp.array[ri2 * 3 + 1] = ry;
+    }
+    rp.needsUpdate = true;
+  }
+  /* v21：花瓣飘落 */
+  G.petals.forEach(function (pt) {
+    var py = pt.sprite.position.y - dt * pt.speed;
+    if (py < 0.5) py = pt.y0;
+    pt.sprite.position.y = py;
+    pt.sprite.position.x = pt.x0 + Math.sin(now * 0.0006 + pt.phase) * 1.2;
+    pt.sprite.material.rotation = Math.sin(now * 0.001 + pt.phase) * 0.6;
   });
+  /* v21：飞过的小鸟——每隔一阵子从天边飞过去 */
+  if (G.flyby) {
+    G.flybyTimer -= dt;
+    if (G.flybyTimer <= 0 && !G.flyby.visible) {
+      G.flyby.visible = true;
+      G.flyby.position.set(-75, 22 + Math.random() * 10, -25 + Math.random() * 40);
+    }
+    if (G.flyby.visible) {
+      G.flyby.position.x += dt * 13;
+      G.flyby.position.y += Math.sin(now * 0.002) * 0.15;
+      var flap = 0.3 + Math.abs(Math.sin(now * 0.015)) * 0.7;
+      var fw = G.flyby.userData.wings;
+      if (fw) { fw.L.rotation.z = flap; fw.R.rotation.z = -flap; }
+      if (G.flyby.position.x > 80) { G.flyby.visible = false; G.flybyTimer = 18 + Math.random() * 12; }
+    }
+  }
   /* 云漂移 */
   G.clouds.forEach(function (cl, idx) {
     cl.position.x += dt * (0.4 + idx * 0.1);
@@ -2258,11 +2503,11 @@ async function init() {
     setLoad(1, '完成！');
     $('loading').style.display = 'none';
     showOverlay('unlock');
-    window.__v19 = {
+    window.__v21 = {
       game: G, getState: getState, sentenceFor: sentenceText,
-      setWords: function (words) { G.selWords = words.slice(); },
+      setWord: function (w) { G.selWord = w; },
       startGame: startGame, setSpeed: function (n) { G.speedMul = n; },
-      playQuestionAudio: playQuestionAudio, doHint: doHint,
+      doHint: doHint, sayClip: sayClip, playClip: playClip,
       walkTo: function (id, x, z, speed) { return moveTo(id, x, z, speed); },
       teleport: function (id, x, z) { stopMoving(id); clearPlacement(id); setCharPos(id, x, z, 0); },
       focusOn: function (id) { G.camMode = 'follow'; G.followId = id; },
@@ -2274,18 +2519,12 @@ async function init() {
                  FR: l.FR ? l.FR.rotation.x : (l.R ? l.R.rotation.x : 0),
                  moving: !!u.moving, phase: u.phase };
       },
-      ringPos: function (wid) {
-        var c = null;
-        G.circles.forEach(function (cc) { if (cc.wid === wid) c = cc; });
-        return c ? { x: c.x, y: c.y, z: c.z } : null;
-      },
       project: function (x, y, z) { return projectToClient(x, y, z); },
-      /* v19 测试用：所有圈的屏幕坐标 + 角色在屏幕上的高度（像素） */
-      placeCircles: function () {
-        return G.circles.map(function (c) {
-          var p = projectToClient(c.x, c.y + 0.4, c.z);
-          return { wid: c.wid, x: c.x, z: c.z, sx: p.x, sy: p.y };
-        });
+      /* v21 测试用：目标在屏幕上的位置 + 角色在屏幕上的高度（像素） */
+      targetScreen: function () {
+        if (!G.curRound) return null;
+        var tp = targetScreenPoint(G.curRound);
+        return projectToClient(tp.x, tp.y, tp.z);
       },
       charScreen: function (id) {
         var g = G.chars[id];
@@ -2295,14 +2534,14 @@ async function init() {
                  heightPx: feet.y - head.y, visible: !feet.behind && feet.y >= 0 && feet.y <= window.innerHeight };
       }
     };
-    window.__v18 = window.__v19;
-    window.__v20 = window.__v19;
-    window.__v18ready = true;
+    window.__v19 = window.__v21;
+    window.__v20 = window.__v21;
     window.__v19ready = true;
     window.__v20ready = true;
-    console.log('[v20] ready');
+    window.__v21ready = true;
+    console.log('[v21] ready');
   } catch (e) {
-    console.error('[v20] init failed', e);
+    console.error('[v21] init failed', e);
     var m = $('loadmsg');
     if (m) m.textContent = '加载失败：' + (e && e.message ? e.message : e);
   }
